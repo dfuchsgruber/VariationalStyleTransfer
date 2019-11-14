@@ -1,0 +1,158 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Journal Article
+% LaTeX Template
+% Version 1.4 (15/5/16)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% Original author:
+% Frits Wenneker (http://www.howtotex.com) with extensive modifications by
+% Vel (vel@LaTeXTemplates.com)
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[twoside,twocolumn]{article}
+
+\usepackage{amsmath}
+\usepackage[backend=bibtex]{biblatex}
+\usepackage{blindtext} % Package to generate dummy text throughout this template 
+
+\usepackage[sc]{mathpazo} % Use the Palatino font
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\linespread{1.05} % Line spacing - Palatino needs more space between lines
+\usepackage{microtype} % Slightly tweak font spacing for aesthetics
+
+\usepackage[english]{babel} % Language hyphenation and typographical rules
+
+\usepackage[hmarginratio=1:1,top=32mm,columnsep=20pt]{geometry} % Document margins
+\usepackage[hang, small,labelfont=bf,up,textfont=it,up]{caption} % Custom captions under/above floats in tables or figures
+\usepackage{booktabs} % Horizontal rules in tables
+
+\usepackage{lettrine} % The lettrine is the first enlarged letter at the beginning of the text
+
+\usepackage{enumitem} % Customized lists
+\setlist[itemize]{noitemsep} % Make itemize lists more compact
+
+\usepackage{abstract} % Allows abstract customization
+\renewcommand{\abstractnamefont}{\normalfont\bfseries} % Set the "Abstract" text to bold
+\renewcommand{\abstracttextfont}{\normalfont\small\itshape} % Set the abstract itself to small italic text
+
+\usepackage{titlesec} % Allows customization of titles
+\renewcommand\thesection{\Roman{section}} % Roman numerals for the sections
+\renewcommand\thesubsection{\roman{subsection}} % roman numerals for subsections
+\titleformat{\section}[block]{\large\scshape\centering}{\thesection.}{1em}{} % Change the look of the section titles
+\titleformat{\subsection}[block]{\large}{\thesubsection.}{1em}{} % Change the look of the section titles
+
+\usepackage{fancyhdr} % Headers and footers
+\pagestyle{fancy} % All pages have headers and footers
+\fancyhead{} % Blank out the default header
+\fancyfoot{} % Blank out the default footer
+\fancyhead[C]{Running title $\bullet$ May 2016 $\bullet$ Vol. XXI, No. 1} % Custom header text
+\fancyfoot[RO,LE]{\thepage} % Custom footer text
+
+\usepackage{titling} % Customizing the title section
+
+\usepackage{hyperref} % For hyperlinks in the PDF
+
+%----------------------------------------------------------------------------------------
+%	TITLE SECTION
+%----------------------------------------------------------------------------------------
+
+\setlength{\droptitle}{-4\baselineskip} % Move the title up
+
+\pretitle{\begin{center}\Huge\bfseries} % Article title formatting
+\posttitle{\end{center}} % Article title closing formatting
+\title{Neural Style Transfer using Variational Auto-Encoders} % Article title
+\author{Dominik Fuchsgruber, Jan Schopohl}
+\date{\today} % Leave empty to omit a date
+\renewcommand{\maketitlehookd}{%
+
+}
+
+%----------------------------------------------------------------------------------------
+
+
+\addbibresource{references.bib}
+
+\begin{document}
+
+% Print the title
+\maketitle
+
+\section{Introduction}
+
+Neural Style transfer describes the task of extracting the style information of a style image $y$ and applying it to a content image $x$, in order to obtain a stylized version of $x$. Finding two disentangled representations of the content and style of an image is a crucial ingredient for models that are capable of describing various styles while providing visually appealing results. Following closely the approach of \cite{Kotovenko_2019_ICCV}, a content representation can be obtained using an auto-encoder architecture, where the decoder $D$ is additionally conditioned on a style embedding, which is produced as the output of a second style encoder network. We propose to make use of variational auto-encoders \cite{vae} instead in order to enforce the model to learn a smooth latent style space, which aims at improving interpolation between different artistic styles. 
+
+\section{Proposal}
+
+The proposed model is a direct extension of the model elaborated in \cite{Kotovenko_2019_ICCV}. Instead of using a style encoder $E_s$ network to output a single style representation of an image, our approach outputs the mean and variance a Gaussian distribution, that captures variation in the given style. The decoder network of \cite{Kotovenko_2019_ICCV} is conditioned on a style representation sampled from the distribution obtained by the modified style encoding network. Also, because of the lack of computational resources and to limit the scope of the project, we will not employ an adversarial setting to train the generator model, in contrast to \cite{Kotovenko_2019_ICCV}. Instead, the network will be trained w.r.t. to the following loss functions.
+
+\begin{equation}
+\begin{split}
+	\mathcal{L}_{FP-content} & = \\ & \mathop{\mathbb{E}}_{z \sim E_s(y)} \lVert E_c(x) - E_c(G(x, z))\rVert_2^2
+\label{eq:lfpcontent}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+	\mathcal{L}_{FPT-style} & = \mathop{\mathbb{E}}_{\substack{z_1 \sim E_s(y_1) \\ z_2 \sim E_s(y_2)}}  \max(0, r + \\
+	& \lVert E_s(y_1) - E_s(G(x, z_1))\rVert^2_2  - \\
+	& \lVert E_s(y_1) - E_s(G(x, z_2))\rVert^2_2) 
+\end{split}
+\label{eq:lfptstyle}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\mathcal{L}_{FPD} & = \mathop{\mathbb{E}}_{z \sim E_s(y)} \max(0, \\ & 
+\lVert E_s(G(x_1, z)) - E_s(G(x_2, z))\rVert^2_2 - \\ &
+\lVert E_s(G(x_1, z)) - z \rVert^2_2)
+\end{split}
+\label{eq:lfdp}
+\end{equation}
+
+\begin{equation}
+\mathcal{L}_{KL} = \mathbb{KL}(E_s(y) \Vert p(z))
+\label{eq:lkl}
+\end{equation}
+
+where $E_c$ and $E_s$ describe the content and style decoder networks, and $G(x, z) = D(E(x), z)$ represents the output of the decoder network $D$ given a content image and style representation. While the fixpoint content loss \eqref{eq:lfpcontent} ensures that the content representation of $x$ is preserved, the fixpoint triplet style loss \eqref{eq:lfptstyle} ensures that representations of different styles are far and those of similar styles are close in the style space. The fixpoint disentanglement loss ensures, that the discrepancy between two stylizations is smaller than those of a stylization and the style image in the style space. Lastly, \eqref{eq:lkl} enforces the style distribution space to resemble a standard normal distribution, since we set $p(z)$ as such. We additionally propose, to use a perceptual loss considering the first few layers of a pre-trained model (such as VGG) to replace the pixel loss of \cite{Kotovenko_2019_ICCV}.
+
+\section{Dataset and Model}
+
+We propose to use the same dataset that has been used by \cite{Kotovenko_2019_ICCV}, namely the places365 dataset \cite{places365} as a source of content images $x$ and the Wikiart dataset \cite{wikiart} to obtain several artistic style images $y$. Considering our limited resources, we think of downsampling the images to a 64x64 resolution to leverage the computational burden however.
+
+While we would like to also adapt the model architecture directly from \cite{Kotovenko_2019_ICCV} and most likely scale it down to fit our setting, the source code of their model has not been published to the current day and the supplementary material does not describe the architecture used in-depth. Thus, we plan on implementing the structure of a (shallow) VGG or ResNet architecture for the content and style encoders $E_c$ and $E_s$ respectively. The decoder architecture follows a similar structure, and the conditioning on the style is achieved by replacing the affine parameters of the instance normalization with the values obtained from the $z$ it was conditioned on.
+
+In order to calculate the perceptual loss that ensures that the content of the input image is preserved, we propose to use the first few layers of a pre-trained model like VGG-16 and calculate the $L2$ distances of the feature activations of the input image $x$ and its stylized counterpart $G(x, z)$.
+
+\section{Project Plan and Milestones}
+
+We plan on successively building our architecture starting from scratch. That is, the first step is to train a fully functional standard auto-encoder architecture that is able to faithfully reconstruct any image given its content representation $E_c(x)$. Keeping these model parts fixed, we will implement the style encoder $E_s(y)$ as a standard encoder, training it on the losses given by \cite{Kotovenko_2019_ICCV}. Lastly, we propose to extend the model by replacing $E_s(y)$ with a variational version and thus complete the proposed setup.
+
+Evaluating the results our model provides quantitatively proved to be quite a challenging task in neural style transfer. Thus, we will rely on qualitative metrics only. That is, we plan on conducting a small survey including for example friends or chair members to come up with a deception rate value, since we most likely can not rely on art experts to  participate. We also plan on showing results on the enhanced style interpolation capabilities of our model.
+
+Thus, we come up with the following milestones:
+\begin{itemize}
+	\item Implement and train a standard auto-encoder
+	\item Implement a style encoder and conditioning on the decoder network
+	\item Implement the variational style encoder
+	\item Perform a qualitative survey on the results
+\end{itemize}
+
+\section{Related Work}
+
+The concept of neural style transfer was first introduced by Gatys et. al. in \cite{gatys}, where however optimization was performed on the image directly resulting in the lack of real-time capabilities. Follow-up works introduced Adaptive Instance Normalization as a concept, where the affine parameters of the instance normalization layers are viewed as being able to capture the style of an image and thus are transferred from the style to the content image utilizing auto-encoders as well \cite{adain}. As their model is a fully feed forward pipeline, it does not suffer from heavy computational requirements. Kotovenko et. al. proposed a framework which explicitly tries to find disentangled representations for the content and style of an image by introducing a fixpoint disentanglement loss. Their work \cite{Kotovenko_2019_ICCV} is the basis for our proposed approach. Additionally, the concept of variational auto-encoders, which we also rely on, was first introduced in \cite{vae}.
+
+\printbibliography
+
+\end{document}
