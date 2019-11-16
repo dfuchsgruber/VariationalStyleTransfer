@@ -93,12 +93,12 @@ Neural Style transfer describes the task of extracting the style information of 
 
 \section{Proposal}
 
-The proposed model is a direct extension of the model elaborated in \cite{Kotovenko_2019_ICCV}. Instead of using a style encoder $E_s$ network to output a single style representation of an image, our approach outputs the mean and variance of a Gaussian distribution, that captures variation in the given style. The decoder network of \cite{Kotovenko_2019_ICCV} is conditioned on a style representation sampled from the distribution obtained by the modified style encoding network. Because of the lack of computational resources and to limit the scope of the project, we will not employ an adversarial setting to train the generator model, in contrast to \cite{Kotovenko_2019_ICCV}. Furthermore, we propose replacing the pixel- and content-loss of \cite{Kotovenko_2019_ICCV} with a perceptual loss \cite{johnson}. This loss can be implemented by considering the first few layers of a pre-trained model such as VGG and calculating the $L2$ distances of the feature activations of the input image $x$ and its stylized counterpart $G(x, z)$, where $G(x, z) = D(E(x), z)$ represents the output of the decoder network $D$ given a content image and style representation.
+The proposed model is a direct extension of the model elaborated in \cite{Kotovenko_2019_ICCV}. Instead of using a style encoder $E_s$ network to output a single style representation of an image, our approach outputs the mean and variance of a Gaussian distribution, that captures variation in the given style. The decoder network of \cite{Kotovenko_2019_ICCV} is conditioned on a style representation sampled from the distribution obtained by the modified style encoding network. Because of the lack of computational resources and to limit the scope of the project, we will not employ an adversarial setting to train the generator model, in contrast to \cite{Kotovenko_2019_ICCV}. Furthermore, we propose replacing the pixel- and content-loss of \cite{Kotovenko_2019_ICCV} with a perceptual loss \cite{johnson}. This loss can be implemented by considering the first few layers of a pre-trained model such as VGG-19 and calculating the $L2$ distances of the feature activations of the input image $x$ and its stylized counterpart $G(x, z)$, where $G(x, z) = D(E(x), z)$ represents the output of the decoder network $D$ given a content image and style representation.
 This loss ensures that the content representation of $x$ is preserved.
 
-To enforce a similar style in the output as the style input image $y$, we propose using a perceptual loss for the style as well. To calculate the loss, a pre-trained model can be used and the difference between the Gram matrices of feature activations of the input image $x$ and the stylized output $G(x, z)$ can be compared \cite{johnson}.
+To enforce a similar style in the output as the style input image $y$, in contrast to \cite{Kotovenko_2019_ICCV}, we propose using a perceptual loss for the style as well. To calculate the loss, the Gram matrices of features activation maps of a pretrained VGG-19 network between the input image $x$ and the stylized output $G(x, z)$ can be compared \cite{johnson}.
 
-Additionally, the network will be trained w.r.t. the following loss functions.
+Following \cite{Kotovenko_2019_ICCV}, to minimize the influence of content information in the style representation, we adopt the fixpoint-disentanglement loss:
 
 \begin{equation}
 \begin{split}
@@ -109,24 +109,28 @@ Additionally, the network will be trained w.r.t. the following loss functions.
 \label{eq:lfdp}
 \end{equation}
 
+
+where $E_c$ and $E_s$ describe the content and style decoder networks. The fixpoint disentanglement loss ensures that the discrepancy between two stylizations is smaller than those of a stylization and the style image in the style space. Thus, it tries to prevent the content of the style image influencing the stylization.
+
+As is standard for variational auto-encoders, the loss function given in equation \eqref{eq:lkl} enforces the style distribution space to resemble a standard normal distribution, since we set $p(z)$ as such.
+
+
 \begin{equation}
 \mathcal{L}_{KL} = \mathbb{KL}(E_s(y) \Vert p(z))
 \label{eq:lkl}
 \end{equation}
 
-where $E_c$ and $E_s$ describe the content and style decoder networks. The fixpoint disentanglement loss ensures that the discrepancy between two stylizations is smaller than those of a stylization and the style image in the style space. It is necessary to obtain disentangled representations of style and content. Lastly, \eqref{eq:lkl} enforces the style distribution space to resemble a standard normal distribution, since we set $p(z)$ as such.
-
 \section{Dataset and Model}
 
-We propose to use the same dataset that has been used by \cite{Kotovenko_2019_ICCV}, namely the places365 dataset \cite{places365}, as a source of content images $x$ and the Wikiart dataset \cite{wikiart} to obtain several artistic style images $y$. Considering our limited resources, we plan on downsampling the images to a 64x64 resolution to lower the computational burden.
+We propose to use the same dataset that has been used by \cite{Kotovenko_2019_ICCV}, namely the places365 dataset \cite{places365}, as a source of content images $x$ and the Wikiart dataset \cite{wikiart} to obtain several artistic style images $y$. In contrast to \cite{Kotovenko_2019_ICCV}, we will however not group images by the same artist together as sharing a style, as this is not required for the loss functions included in our setting and may also be an invalid assumption on its own, as artistic styles may vary over time for even a single artist. Considering our limited resources, we plan on downsampling the images to a 64x64 resolution to lower the computational burden.
 
-While we would like to also adapt the model architecture directly from \cite{Kotovenko_2019_ICCV} and most likely scale it down to fit our setting, the source code of their model has not been published to the current day and the supplementary material does not describe the architecture used in-depth. Thus, we plan on implementing the structure of a (shallow) VGG or ResNet architecture for the content and style encoders $E_c$ and $E_s$ respectively. The decoder architecture follows a similar structure, and the conditioning on the style is achieved by replacing the affine parameters of the instance normalization with the values obtained from the $z$ it was conditioned on.
+While we would like to also adapt the model architecture directly from \cite{Kotovenko_2019_ICCV} and most likely scale it down to fit our setting, the source code of their model has not been published to the current day and the supplementary material does not describe the architecture used in-depth. Thus, we plan on implementing the structure of a (shallow) VGG or ResNet architecture for the content and style encoders $E_c$ and $E_s$ respectively. The decoder architecture follows a similar structure, that should mirror the encoder networks, and the conditioning on the style is achieved by replacing the affine parameters of the instance normalization with the values obtained from the $z$ it was conditioned on.
 
-In order to calculate the perceptual content and style losses, we propose to use the first few layers of a pre-trained model like VGG-16.
+In order to calculate the perceptual content and style losses, we propose to use the first few layers of a pre-trained model like VGG-19.
 
 \section{Project Plan and Milestones}
 
-We plan on successively building our architecture starting from scratch. That is, the first step is to train a fully functional standard auto-encoder architecture that is able to faithfully reconstruct any image given its content representation $E_c(x)$. Keeping these model parts fixed, we will implement the style encoder $E_s(y)$ as a standard encoder, training it on the losses given by \cite{Kotovenko_2019_ICCV}. Lastly, we propose to extend the model by replacing $E_s(y)$ with a variational version and thus complete the proposed setup.
+We plan on successively building our architecture starting from scratch. That is, the first step is to train a fully functional standard auto-encoder architecture that is able to faithfully reconstruct any image given its content representation $E_c(x)$. Keeping these model parts fixed, we will implement the style encoder $E_s(y)$ as a standard encoder, training it solely on the losses proposed above. Lastly, we propose to extend the model by replacing $E_s(y)$ with a variational version and thus complete the proposed setup.
 
 Evaluating the results our model provides quantitatively proved to be quite a challenging task in neural style transfer. Thus, we will rely on qualitative metrics only. That is, we plan on conducting a small survey including for example friends or chair members to come up with a deception rate value, since we most likely can not rely on art experts to  participate. We also plan on showing results on the enhanced style interpolation capabilities of our model.
 
@@ -140,7 +144,7 @@ Thus, we come up with the following milestones:
 
 \section{Related Work}
 
-The concept of neural style transfer was first introduced by Gatys et. al. in \cite{gatys}, where however optimization was performed on the image directly resulting in the lack of real-time capabilities. Follow-up works introduced Adaptive Instance Normalization as a concept, where the affine parameters of the instance normalization layers are viewed as being able to capture the style of an image and thus are transferred from the style to the content image utilizing auto-encoders as well \cite{adain}. As their model is a fully feed forward pipeline, it does not suffer from heavy computational requirements. Kotovenko et. al. proposed a framework which explicitly tries to find disentangled representations for the content and style of an image by introducing a fixpoint disentanglement loss. Their work \cite{Kotovenko_2019_ICCV} is the basis for our proposed approach. Additionally, the concept of variational auto-encoders, which we also rely on, was first introduced in \cite{vae}.
+The concept of neural style transfer was first introduced by Gatys et al. in \cite{gatys}, where however optimization was performed on the image directly resulting in the lack of real-time capabilities. Follow-up works introduced Adaptive Instance Normalization as a concept, where the affine parameters of the instance normalization layers are viewed as being able to capture the style of an image and thus are transferred from the style to the content image utilizing auto-encoders as well \cite{adain}. As their model is a fully feed forward pipeline, it does not suffer from heavy computational requirements. Achieving style transfer by applying a transformation to a hidden representation of an image was recently also used by \cite{linear}, where linear transformation is learned. Furthermore, Li et al. \cite{linear} also train their architecture using perceptual losses for content and style, which we also plan on utilizing. The VGG-19 that we intend to evaluate for retrieval of those losses was introduced in \cite{vgg19}. Kotovenko et al. proposed a framework which explicitly tries to find disentangled representations for the content and style of an image by introducing a fixpoint disentanglement loss. Their work \cite{Kotovenko_2019_ICCV} is the basis for our proposed approach. Additionally, the concept of variational auto-encoders, which we also rely on, was first introduced in \cite{vae}.
 
 \printbibliography
 
