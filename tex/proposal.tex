@@ -93,23 +93,12 @@ Neural Style transfer describes the task of extracting the style information of 
 
 \section{Proposal}
 
-The proposed model is a direct extension of the model elaborated in \cite{Kotovenko_2019_ICCV}. Instead of using a style encoder $E_s$ network to output a single style representation of an image, our approach outputs the mean and variance a Gaussian distribution, that captures variation in the given style. The decoder network of \cite{Kotovenko_2019_ICCV} is conditioned on a style representation sampled from the distribution obtained by the modified style encoding network. Also, because of the lack of computational resources and to limit the scope of the project, we will not employ an adversarial setting to train the generator model, in contrast to \cite{Kotovenko_2019_ICCV}. Instead, the network will be trained w.r.t. to the following loss functions.
+The proposed model is a direct extension of the model elaborated in \cite{Kotovenko_2019_ICCV}. Instead of using a style encoder $E_s$ network to output a single style representation of an image, our approach outputs the mean and variance of a Gaussian distribution, that captures variation in the given style. The decoder network of \cite{Kotovenko_2019_ICCV} is conditioned on a style representation sampled from the distribution obtained by the modified style encoding network. Because of the lack of computational resources and to limit the scope of the project, we will not employ an adversarial setting to train the generator model, in contrast to \cite{Kotovenko_2019_ICCV}. Furthermore, we propose replacing the pixel- and content-loss of \cite{Kotovenko_2019_ICCV} with a perceptual loss \cite{johnson}. This loss can be implemented by considering the first few layers of a pre-trained model such as VGG and calculating the $L2$ distances of the feature activations of the input image $x$ and its stylized counterpart $G(x, z)$, where $G(x, z) = D(E(x), z)$ represents the output of the decoder network $D$ given a content image and style representation.
+This loss ensures that the content representation of $x$ is preserved.
 
-\begin{equation}
-\begin{split}
-	\mathcal{L}_{FP-content} & = \\ & \mathop{\mathbb{E}}_{z \sim E_s(y)} \lVert E_c(x) - E_c(G(x, z))\rVert_2^2
-\label{eq:lfpcontent}
-\end{split}
-\end{equation}
+To enforce a similar style in the output as the style input image $y$, we propose using a perceptual loss for the style as well. To calculate the loss, a pre-trained model can be used and the difference between the Gram matrices of feature activations of the input image $x$ and the stylized output $G(x, z)$ can be compared \cite{johnson}.
 
-\begin{equation}
-\begin{split}
-	\mathcal{L}_{FPT-style} & = \mathop{\mathbb{E}}_{\substack{z_1 \sim E_s(y_1) \\ z_2 \sim E_s(y_2)}}  \max(0, r + \\
-	& \lVert E_s(y_1) - E_s(G(x, z_1))\rVert^2_2  - \\
-	& \lVert E_s(y_1) - E_s(G(x, z_2))\rVert^2_2) 
-\end{split}
-\label{eq:lfptstyle}
-\end{equation}
+Additionally, the network will be trained w.r.t. the following loss functions.
 
 \begin{equation}
 \begin{split}
@@ -125,15 +114,15 @@ The proposed model is a direct extension of the model elaborated in \cite{Kotove
 \label{eq:lkl}
 \end{equation}
 
-where $E_c$ and $E_s$ describe the content and style decoder networks, and $G(x, z) = D(E(x), z)$ represents the output of the decoder network $D$ given a content image and style representation. While the fixpoint content loss \eqref{eq:lfpcontent} ensures that the content representation of $x$ is preserved, the fixpoint triplet style loss \eqref{eq:lfptstyle} ensures that representations of different styles are far and those of similar styles are close in the style space. The fixpoint disentanglement loss ensures, that the discrepancy between two stylizations is smaller than those of a stylization and the style image in the style space. Lastly, \eqref{eq:lkl} enforces the style distribution space to resemble a standard normal distribution, since we set $p(z)$ as such. We additionally propose, to use a perceptual loss considering the first few layers of a pre-trained model (such as VGG) to replace the pixel loss of \cite{Kotovenko_2019_ICCV}.
+where $E_c$ and $E_s$ describe the content and style decoder networks. The fixpoint disentanglement loss ensures that the discrepancy between two stylizations is smaller than those of a stylization and the style image in the style space. It is necessary to obtain disentangled representations of style and content. Lastly, \eqref{eq:lkl} enforces the style distribution space to resemble a standard normal distribution, since we set $p(z)$ as such.
 
 \section{Dataset and Model}
 
-We propose to use the same dataset that has been used by \cite{Kotovenko_2019_ICCV}, namely the places365 dataset \cite{places365} as a source of content images $x$ and the Wikiart dataset \cite{wikiart} to obtain several artistic style images $y$. Considering our limited resources, we think of downsampling the images to a 64x64 resolution to leverage the computational burden however.
+We propose to use the same dataset that has been used by \cite{Kotovenko_2019_ICCV}, namely the places365 dataset \cite{places365}, as a source of content images $x$ and the Wikiart dataset \cite{wikiart} to obtain several artistic style images $y$. Considering our limited resources, we plan on downsampling the images to a 64x64 resolution to lower the computational burden.
 
 While we would like to also adapt the model architecture directly from \cite{Kotovenko_2019_ICCV} and most likely scale it down to fit our setting, the source code of their model has not been published to the current day and the supplementary material does not describe the architecture used in-depth. Thus, we plan on implementing the structure of a (shallow) VGG or ResNet architecture for the content and style encoders $E_c$ and $E_s$ respectively. The decoder architecture follows a similar structure, and the conditioning on the style is achieved by replacing the affine parameters of the instance normalization with the values obtained from the $z$ it was conditioned on.
 
-In order to calculate the perceptual loss that ensures that the content of the input image is preserved, we propose to use the first few layers of a pre-trained model like VGG-16 and calculate the $L2$ distances of the feature activations of the input image $x$ and its stylized counterpart $G(x, z)$.
+In order to calculate the perceptual content and style losses, we propose to use the first few layers of a pre-trained model like VGG-16.
 
 \section{Project Plan and Milestones}
 
