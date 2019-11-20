@@ -405,3 +405,11 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Data
+*.zip
+*.tar
+*.tar.gz
+
+*.jpg
+*.jpeg
+*.png
