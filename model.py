@@ -30,12 +30,12 @@ class Encoder(torch.nn.Module):
         
         Parameters:
         -----------
-        input : torch.Tensor, shape [batch_size, in_features, width, height]
+        input : torch.Tensor, shape [batch_size, 3, width, height]
             A batch of images to encode.
 
         Returns:
         --------
-        output : torch.Tensor, shape [batch_size, in_features, width / 4, height / 4]
+        output : torch.Tensor, shape [batch_size, out_features, width / scale, height / scale]
             Feature maps for the images.
         """
         return self.layers(input)
@@ -57,12 +57,33 @@ class Decoder(torch.nn.Module):
         super().__init__()
         self.layers = torch.nn.modules.Sequential()
         conv_layer_added = False # The first layer should be a convolution, ignore the first layers that are non convolutional
-        for layer in reversed(architecture(pretrained=False, progress=True).features[:n_layers]):
-            if isinstance(layer, torch.nn.modules.Conv2d): print('Conv2d', layer)
-            elif isinstance(layer, torch.nn.modules.MaxPool2d): print('Pooling', layer)
-            elif isinstance(layer, torch.nn.modules.ReLU): print('ReLU', layer)
-            else: print('Unknown layer', layer)
+        for idx, layer in enumerate(reversed(architecture(pretrained=False, progress=True).features[:n_layers])):
+            if isinstance(layer, torch.nn.modules.Conv2d):
+                conv = torch.nn.modules.Conv2d(layer.out_channels, layer.in_channels, kernel_size=layer.kernel_size, 
+                    stride=layer.stride, dilation=layer.dilation, padding=layer.padding)
+                self.layers.add_module(f'{idx}_Conv2d', conv)
+                conv_layer_added = True
+            elif isinstance(layer, torch.nn.modules.MaxPool2d): 
+                if not conv_layer_added: continue
+                self.layers.add_module(f'{idx}_UpsamplingNearest2d', torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
+            elif isinstance(layer, torch.nn.modules.ReLU):
+                self.layers.add_module(f'{idx}_ReLU' ,torch.nn.modules.ReLU(inplace=layer.inplace))
+            else:
+                raise NotImplementedError('Decoder implementation can not mirror {type(layer)} layer.')
 
+    def forward(self, input):
+        """ Forward pass through the decoder network. 
+        
+        Parameters:
+        -----------
+        input : torch.Tensor, shape [batch_size, out_features, width, height]
+            A batch of images to decode.
 
-
+        Returns:
+        --------
+        output : torch.Tensor, shape [batch_size, 3, width * scale, height * scale]
+            Decoded images.
+        """
+        return self.layers(input)
+    
 

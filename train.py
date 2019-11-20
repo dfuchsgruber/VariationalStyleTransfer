@@ -6,12 +6,14 @@ data_content = DataLoader(data.load_debug_content_datset(), batch_size=32, shuff
 encoder = model.Encoder()
 decoder = model.Decoder()
 
-exit(0)
+print(encoder)
+print(decoder)
 
 for idx, batch in enumerate(data_content):
     images, paths = batch
     h_content = encoder(images)
-    print(h_content.size())
+    reconst = decoder(h_content)
+    print(reconst.size())
     break
     
 
