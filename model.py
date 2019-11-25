@@ -135,6 +135,6 @@ def AdaIn(x, y):
     y_mean, y_std = instance_mean_and_std(y)
     x = x - x_mean # Centering
     x /= x_std + 1e-12 # Normalizing
-    x += y_mean # Offseting
     x *= y_std # Scaling
+    x += y_mean # Offseting
     return x
