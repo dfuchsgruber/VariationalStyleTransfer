@@ -70,3 +70,45 @@ def perceptual_loss(feature_activations_x, feature_activations_y):
     for key in feature_activations_x:
         losses[key] = mse_loss(feature_activations_x[key], feature_activations_y[key])
     return losses
+
+def style_loss(feature_activations_x, feature_activations_y):
+    """ Computes the style loss between feature activations of two instances x and y. That is, for each pair of feature maps,
+    the gram matrices of the flattened maps are computed and the L2 distance is calculated.
+
+    Parameters:
+    -----------
+    feature_activations_x : dict
+        A dict of feature activation maps of shape [B, C, H', W']
+    feature_activations_y : dict
+        A dict of feature activation maps of shape [B, C, H', W']
+
+    Returns:
+    --------
+    losses : dict
+        A dict of L2 distances between feature activation gram matrices.
+    """
+    losses = {}
+    for key in feature_activations_x:
+        cov_x, cov_y = gram_matrix(feature_activations_x[key]), gram_matrix(feature_activations_y[key])
+        losses[key] = mse_loss(cov_x, cov_y)
+    return losses
+    
+
+
+def gram_matrix(activations):
+    """ Computes the gram matrix of feature activations. 
+    
+    Parameters:
+    -----------
+    activations : torch.Tensor, shape [B, C, H, W]
+        The feature activations.
+    
+    Returns:
+    --------
+    gram_matrix : torch.Tensor, shape [C, C]
+        The gram matrix of the activations.
+    """
+    B, C, H, W = activations.size()
+    activations = activations.view(B, C, H * W)
+    gram_matrix = torch.bmm(activations, activations.transpose(1, 2)) # Batchwise inner products of flattened activations
+    return gram_matrix / (C * H * W + 1e-20)

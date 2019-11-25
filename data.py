@@ -40,10 +40,44 @@ class ImageDataset(torch.utils.data.Dataset):
         return len(self.paths)
 
 
-def load_debug_content_datset(resolution=64):
-    """ Loads the debug content dataset containing only one image, 'Lena' """
+def load_debug_content_dataset(resolution=64):
+    """ Loads some debug content images. """
     return ImageDataset(list_images('dataset/debug/content'), resolution=resolution)
 
 def load_debug_style_dataset(resolution=64):
-    """ Loads the debug style dataset contining only one articistic image of M. Duchamp. """
+    """ Loads some debug style images. """
     return ImageDataset(list_images('dataset/debug/style'), resolution=resolution)
+
+class DatasetPairIterator:
+    """ Iterator that endlessly yields pairs of images. """
+
+    def __init__(self, dataset_content, dataset_style):
+        """ Initializes the pairwise dataset iterator.
+        
+        Parameters:
+        -----------
+        dataset_content : iterable
+            An iterable for content images.
+        dataset_style : iterable
+            An iterable for style images.
+        """
+        self.dataset_content = dataset_content
+        self.dataset_style = dataset_style
+        self.dataset_content_iterator = iter(self.dataset_content)
+        self.dataset_style_iterator = iter(self.dataset_style)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            content = next(self.dataset_content_iterator)
+        except StopIteration:
+            self.dataset_content_iterator = iter(self.dataset_content)
+            content = next(self.dataset_content_iterator)
+        try:
+            style = next(self.dataset_style_iterator)
+        except:
+            self.dataset_style_iterator = iter(self.dataset_style)
+            style = next(self.dataset_style_iterator)
+        return content, style

@@ -413,3 +413,9 @@ dmypy.json
 *.jpg
 *.jpeg
 *.png
+
+# Torch outputs
+*.pt
+
+# Notebooks
+*.ipynb

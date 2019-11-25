@@ -89,3 +89,52 @@ class Decoder(torch.nn.Module):
         return self.layers(input)
     
 
+
+def instance_mean_and_std(x):
+    """ Calculates the mean and standard deviation of a batch of images over the image dimensions.
+    Dimensions of the statistics are expanded to fit the input size.
+    
+    Parameters:
+    -----------
+    x : torch.Tensor, shape [B, C, H, W]
+        The tensor to get the mean and standard deviation of.
+    
+    Returns:
+    --------
+    x_mean : torch.Tensor, shape [B, C, H, W]
+        The instance means of x.
+    x_std : torch.Tensor, shape [B, C, H, W]
+        The instance standard deviations of x.
+    """
+    B, C, H, W = x.size()
+    x_mean = x.view(B, C, H * W).mean(dim=2).view(B, C, 1, 1) # Flattening accros image dimensions
+    x_std = (x - x_mean).view(B, C, H * W).var(dim=2).sqrt().view(B, C, 1, 1)
+    return x_mean, x_std
+
+
+def AdaIn(x, y):
+    """ Applies Adaptive instance normalization to x with the affine parameters of y. Both mean and variance 
+    of per channel and instance in a batch (i.e. the summation is done over the image dimensions only) are 
+    calculated for x and y. Afterwards, x is zero-centered and normalized to have a scale of 1.0. 
+    Lastly, the centered \bar{x} is shifted by the mean and scaled by the standard deviation obtained by
+    the instance normalization of y.
+
+    Parameters:
+    -----------
+    x : torch.Tensor, shape [B, C, H, W]
+        The tensor which is to be normalized and transformed.
+    y : torch.Tensor, shape [B, C, H', W']
+        The tensor from which the affine transformation is gained.
+
+    Returns:
+    --------
+    z : torch.Tensor, shape [B, C, H, W]
+        The transformed version of x.
+    """
+    x_mean, x_std = instance_mean_and_std(x)
+    y_mean, y_std = instance_mean_and_std(y)
+    x = x - x_mean # Centering
+    x /= x_std + 1e-12 # Normalizing
+    x += y_mean # Offseting
+    x *= y_std # Scaling
+    return x
