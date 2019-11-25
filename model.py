@@ -17,7 +17,7 @@ class Encoder(torch.nn.Module):
         -----------
         n_layers : int
             How many layers of the architecture are used for the encoder.
-        architecture : torchvision.model
+        architecture : torch.nn.module
             A torchvision architecture that allows the first n layers to be extracted.
         pretrained : bool
             If True, pretrained weights of the architecture are used.
@@ -59,15 +59,17 @@ class Decoder(torch.nn.Module):
         conv_layer_added = False # The first layer should be a convolution, ignore the first layers that are non convolutional
         for idx, layer in enumerate(reversed(architecture(pretrained=False, progress=True).features[:n_layers])):
             if isinstance(layer, torch.nn.modules.Conv2d):
+                self.layers.add_module(f'{idx}_ReflectionPadding', torch.nn.modules.ReflectionPad2d(1))
                 conv = torch.nn.modules.Conv2d(layer.out_channels, layer.in_channels, kernel_size=layer.kernel_size, 
-                    stride=layer.stride, dilation=layer.dilation, padding=layer.padding)
+                    stride=layer.stride, dilation=layer.dilation)
                 self.layers.add_module(f'{idx}_Conv2d', conv)
+                #self.layers.add_module(f'{idx}_IN', torch.nn.modules.InstanceNorm2d(layer.in_channels, affine=True))
                 conv_layer_added = True
             elif isinstance(layer, torch.nn.modules.MaxPool2d): 
                 if not conv_layer_added: continue
                 self.layers.add_module(f'{idx}_UpsamplingNearest2d', torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
             elif isinstance(layer, torch.nn.modules.ReLU):
-                self.layers.add_module(f'{idx}_ReLU' ,torch.nn.modules.ReLU(inplace=layer.inplace))
+                self.layers.add_module(f'{idx}_ReLU' ,torch.nn.modules.ReLU(inplace=False))
             else:
                 raise NotImplementedError('Decoder implementation can not mirror {type(layer)} layer.')
 
