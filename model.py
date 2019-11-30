@@ -1,5 +1,6 @@
 import torchvision.models
 import torch
+import function
 
 class Encoder(torch.nn.Module):
     """ Encoder network that contains of the first few layers of the vgg19 [1] network. 
@@ -10,7 +11,7 @@ class Encoder(torch.nn.Module):
     """
     
     
-    def __init__(self, n_layers=12, architecture=torchvision.models.vgg19, pretrained=True):
+    def __init__(self, n_layers=19, architecture=torchvision.models.vgg19, pretrained=True):
         """ Initializes an encoder model based on some (pretrained) architecture. 
         
         Parameters:
@@ -41,10 +42,34 @@ class Encoder(torch.nn.Module):
         return self.layers(input)
         
 
+class AdaInLayer(torch.nn.Module):
+    """ Layer that applies adaptive instance normalization. """
+
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, x, y):
+        """ Applies the affine coefficients of y to x.
+        
+        Parameters:
+        -----------
+        x : torch.Tensor, shape [B, C, H, W]
+            The feature map to be transformed.
+        y : torch.Tensor, shape [B, C, H', W']
+            The feature map to get the coefficients of.
+
+        Returns:
+        --------
+        x' : torch.Tensor, shape [B, C, H, W]
+            The transformed version of x.
+        """
+        return function.adain(x, y)
+
+
 class Decoder(torch.nn.Module):
     """ Decoder network that mirrors the structure of an encoder architecture. """
 
-    def __init__(self, n_layers=12, architecture=torchvision.models.vgg19):
+    def __init__(self, n_layers=19, architecture=torchvision.models.vgg19):
         """ Initializes a decoder model that tries to mirror the encoder architecture.
         
         Parameters:
@@ -55,86 +80,49 @@ class Decoder(torch.nn.Module):
             A torchvision architecture that allows the first n layers to be extracted for the decoder.
         """
         super().__init__()
-        self.layers = torch.nn.modules.Sequential()
+        self.layers = torch.nn.modules.ModuleList()
         conv_layer_added = False # The first layer should be a convolution, ignore the first layers that are non convolutional
         for idx, layer in enumerate(reversed(architecture(pretrained=False, progress=True).features[:n_layers])):
             if isinstance(layer, torch.nn.modules.Conv2d):
-                self.layers.add_module(f'{idx}_ReflectionPadding', torch.nn.modules.ReflectionPad2d(1))
+                self.layers.append(torch.nn.modules.ReflectionPad2d(1))
                 conv = torch.nn.modules.Conv2d(layer.out_channels, layer.in_channels, kernel_size=layer.kernel_size, 
                     stride=layer.stride, dilation=layer.dilation)
-                self.layers.add_module(f'{idx}_Conv2d', conv)
+                self.layers.append(conv)
+                self.layers.append(AdaInLayer())
                 #self.layers.add_module(f'{idx}_IN', torch.nn.modules.InstanceNorm2d(layer.in_channels, affine=True))
                 conv_layer_added = True
-            elif isinstance(layer, torch.nn.modules.MaxPool2d): 
-                if not conv_layer_added: continue
-                self.layers.add_module(f'{idx}_UpsamplingNearest2d', torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
+            elif isinstance(layer, torch.nn.modules.MaxPool2d):
+                self.layers.append(torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
             elif isinstance(layer, torch.nn.modules.ReLU):
-                self.layers.add_module(f'{idx}_ReLU' ,torch.nn.modules.ReLU(inplace=False))
+                if not conv_layer_added: continue
+                self.layers.append(torch.nn.modules.ReLU(inplace=False))
             else:
                 raise NotImplementedError('Decoder implementation can not mirror {type(layer)} layer.')
 
-    def forward(self, input):
+    def forward(self, content, style=None):
         """ Forward pass through the decoder network. 
         
         Parameters:
         -----------
-        input : torch.Tensor, shape [batch_size, out_features, width, height]
+        content : torch.Tensor, shape [batch_size, out_features, width, height]
             A batch of images to decode.
+        style : torch.Tensor, shape [batch_size, out_features, width', height'] or None
+            Optional: A style encoding that is used during AdaIn layers.
+
 
         Returns:
         --------
         output : torch.Tensor, shape [batch_size, 3, width * scale, height * scale]
             Decoded images.
         """
-        return self.layers(input)
+        for layer in self.layers:
+            if isinstance(layer, AdaInLayer):
+                if style is not None:
+                    content = layer(style, content)
+            else:
+                content = layer(content)
+                if style is not None:
+                    style = layer(style)
+
+        return content
     
-
-
-def instance_mean_and_std(x):
-    """ Calculates the mean and standard deviation of a batch of images over the image dimensions.
-    Dimensions of the statistics are expanded to fit the input size.
-    
-    Parameters:
-    -----------
-    x : torch.Tensor, shape [B, C, H, W]
-        The tensor to get the mean and standard deviation of.
-    
-    Returns:
-    --------
-    x_mean : torch.Tensor, shape [B, C, H, W]
-        The instance means of x.
-    x_std : torch.Tensor, shape [B, C, H, W]
-        The instance standard deviations of x.
-    """
-    B, C, H, W = x.size()
-    x_mean = x.view(B, C, H * W).mean(dim=2).view(B, C, 1, 1) # Flattening accros image dimensions
-    x_std = (x - x_mean).view(B, C, H * W).var(dim=2).sqrt().view(B, C, 1, 1)
-    return x_mean, x_std
-
-
-def AdaIn(x, y):
-    """ Applies Adaptive instance normalization to x with the affine parameters of y. Both mean and variance 
-    of per channel and instance in a batch (i.e. the summation is done over the image dimensions only) are 
-    calculated for x and y. Afterwards, x is zero-centered and normalized to have a scale of 1.0. 
-    Lastly, the centered \bar{x} is shifted by the mean and scaled by the standard deviation obtained by
-    the instance normalization of y.
-
-    Parameters:
-    -----------
-    x : torch.Tensor, shape [B, C, H, W]
-        The tensor which is to be normalized and transformed.
-    y : torch.Tensor, shape [B, C, H', W']
-        The tensor from which the affine transformation is gained.
-
-    Returns:
-    --------
-    z : torch.Tensor, shape [B, C, H, W]
-        The transformed version of x.
-    """
-    x_mean, x_std = instance_mean_and_std(x)
-    y_mean, y_std = instance_mean_and_std(y)
-    x = x - x_mean # Centering
-    x /= x_std + 1e-12 # Normalizing
-    x *= y_std # Scaling
-    x += y_mean # Offseting
-    return x

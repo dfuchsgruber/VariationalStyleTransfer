@@ -1,6 +1,9 @@
 import torch
 import torch.utils.data
 import torchvision.transforms as transforms
+import numpy as np
+from pathlib import Path
+import random
 
 import os
 
@@ -10,6 +13,29 @@ from PIL import Image
 def list_images(directory, extensions=('.png', '.jpeg', '.jpg')):
     """ Lists all images in a directory. """
     return [os.path.join(directory,filename) for filename in os.listdir(directory) if any(filename.endswith(extension) for extension in extensions)]
+
+# VGG19 was trained on images that were normalized with these values
+vgg_normalization_mean = np.array([0.485, 0.456, 0.406])
+vgg_normalization_std = np.array([0.229, 0.224, 0.225])
+
+vgg_normalization = transforms.Normalize(vgg_normalization_mean, vgg_normalization_std, inplace=False)
+
+def vgg_normalization_undo(image):
+    """ Undoes the vgg19 normalization. 
+    
+    Parameters:
+    -----------
+    image : torch.Tensor, shape [B, 3, H, W]
+        An image that was normalized to be trained on vgg19.
+
+    Returns:
+    --------
+    recovered : torch.Tensor, shape [B, 3, H, W]
+        An image where then mean and std of the vgg19 model were reapplied.
+    """
+    return (image * vgg_normalization_std.reshape((1, 3, 1, 1))) + vgg_normalization_mean.reshape((1, 3, 1, 1))
+
+
 
 class ImageDataset(torch.utils.data.Dataset):
 
@@ -28,7 +54,8 @@ class ImageDataset(torch.utils.data.Dataset):
             		         transforms.Resize(resolution),
             		         transforms.RandomCrop(resolution),
                              transforms.RandomHorizontalFlip(),
-            		         transforms.ToTensor()])
+            		         transforms.ToTensor(),
+                             vgg_normalization,])
 
     def __getitem__(self, idx):
         image = Image.open(self.paths[idx]).convert('RGB') # Use a RGB instead of an RGBA image
@@ -42,7 +69,10 @@ class ImageDataset(torch.utils.data.Dataset):
 
 def load_debug_content_dataset(resolution=64):
     """ Loads some debug content images. """
-    return ImageDataset(list_images('dataset/debug/content'), resolution=resolution)
+    random.seed(1337)
+    jpgs = list(map(str, list(Path("./dataset/content").rglob("*.jpg"))))
+    random.shuffle(jpgs)
+    return ImageDataset(jpgs[:1000], resolution=resolution)
 
 def load_debug_style_dataset(resolution=64):
     """ Loads some debug style images. """
