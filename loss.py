@@ -4,11 +4,27 @@ import function
 
 # Layer idxs of the vgg19 net before pooling operations
 vgg19_activation_layer_names = {
-    '3' : 'relu1',
-    '8' : 'relu2',
-    '17' : 'relu3',
-    '26' : 'relu4',
-    '35' : 'relu5',
+    '1': 'relu_1_1',
+    '3': 'relu_1_2',
+    '4': 'maxpool_1',
+    '6': 'relu_2_1',
+    '8': 'relu_2_2',
+    '9': 'maxpool_2',
+    '11': 'relu_3_1',
+    '13': 'relu_3_2',
+    '15': 'relu_3_3',
+    '17': 'relu_3_4',
+    '18': 'maxpool_3',
+    '20': 'relu_4_1',
+    '22': 'relu_4_2',
+    '24': 'relu_4_3',
+    '26': 'relu_4_4',
+    '27': 'maxpool_4',
+    '29': 'relu_5_1',
+    '31': 'relu_5_2',
+    '33': 'relu_5_3',
+    '35': 'relu_5_4',
+    '36': 'maxpool_5',
 }
 
 class LossNet(torch.nn.Module):

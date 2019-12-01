@@ -406,6 +406,25 @@ The \textbf{\textcolor{Plum}{style loss}} is given as the \textbf{\textcolor{blu
 \end{frame}
 
 \begin{frame}
+	\frametitle{Style Loss}
+
+
+Try to \textbf{\textcolor{red}{disentangle content and style}}:\\
+$\rightarrow$ Minimize influence of content on style representation
+
+\vspace{10pt}
+
+Let $y_1$ and $y_2$ denote stylizations of content images with style encoding $s$
+
+\begin{equation}
+	\mathcal{L}(y_1, y_2, s) = max(0, \lVert y_1 - y_2 \rVert^2_2 - \lVert y_1 - s \rVert^2_2)
+\end{equation}
+
+Enforces two stylizations of \textbf{same style} to be \textbf{\textcolor{blue}{closer in style space}} than a \textbf{\textcolor{blue}{stylization and the style source image}}.
+	
+\end{frame}
+
+\begin{frame}
 \frametitle{Adaptive Instance Normalization}
 
 \textbf{\textcolor{blue}{Instance Normalization}} is related to \textbf{Batch Normalization} but calculates \textbf{\textcolor{red}{instance-wise}} mean $\mu$ and variance $\sigma^2$, instead of using batch-wise statistics.

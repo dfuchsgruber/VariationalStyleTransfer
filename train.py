@@ -5,11 +5,28 @@ import torch
 # Load training and validation dataset for style and content
 
 VAL_PORTION = 0.2
-ITERATIONS = 2000
+ITERATIONS = 5000
 VAL_ITERATIONS = 10
-CONTENT_LOSS_WEIGHTS = {'input' : 1e2, 'relu3' : 1e2, 'relu4' : 5e1, 'relu5' : 1e1}
-STYLE_LOSS_WEIGHTS = {'input' : 1e2, 'relu1' : 1e2, 'relu2' : 1e2, 'relu3' : 1e2, 'relu4' : 1e2, 'relu5' : 1e2}
 
+CONTENT_LOSS_WEIGHTS = {
+    'relu_4_2' : 1.0,
+}
+
+STYLE_LOSS_WEIGHTS = {
+    'relu_1_1' : 1e3,
+    'relu_2_1' : 1e3,
+    'relu_3_1' : 1e3,
+    'relu_4_1' : 1e3,
+    'relu_5_1' : 1e3,
+}
+
+content_encoder = model.Encoder(pretrained=True)
+content_encoder.load_state_dict(torch.load('output/content_encoder_2501')) #'output/content_encoder_pretrained'))
+#style_encoder = model.Encoder(pretrained=True)
+decoder = model.Decoder()
+decoder.load_state_dict(torch.load('output/decoder_2501')) #'output/decoder_pretrained'))
+loss_net = loss.LossNet()
+loss_net.eval()
 
 data_style = data.load_debug_style_dataset(resolution=64)
 data_style_train, data_style_val = torch.utils.data.random_split(data_style, [len(data_style) - int(VAL_PORTION * len(data_style)), int(VAL_PORTION * len(data_style))])
@@ -23,12 +40,6 @@ data_loader_content_val = DataLoader(data_content_val, batch_size=4, shuffle=Tru
 
 data_loader_train = data.DatasetPairIterator(data_loader_content_train, data_loader_style_train)
 data_loader_val = data.DatasetPairIterator(data_loader_content_val, data_loader_style_val)
-
-content_encoder = model.Encoder(pretrained=True)
-#style_encoder = model.Encoder(pretrained=True)
-decoder = model.Decoder()
-loss_net = loss.LossNet()
-loss_net.eval()
 
 
 # Networks to CUDA device
@@ -47,7 +58,7 @@ for parameter in decoder.parameters():
     trainable_parameters.append(parameter)
 
 
-optimizer = torch.optim.Adamax(trainable_parameters, lr=5e-4)
+optimizer = torch.optim.Adam(trainable_parameters, lr=1e-3)
 
 
 iteration = 0
@@ -71,8 +82,8 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
     style_representation = content_encoder(style_image)
     #style_representation = style_encoder(style_image)
 
-    #t = function.adain(content_representation, style_representation)
-    transformed = decoder(content_representation, style_representation)
+    t = function.adain(content_representation, style_representation)
+    transformed = decoder(t, style_representation)
 
     features_content = loss_net(content_image)
     features_style = loss_net(style_image)
@@ -93,7 +104,21 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
 
     print(f'\r{iteration:06d} : avg perceptual_loss : {running_perceptual_loss / running_count:.4f}\tavg style loss : {running_style_loss / running_count:.4f}', end='\r')
 
-    if iteration % 10 == 1:
+    if iteration % 500 == 1:
+        torch.save(content_encoder.state_dict(), f'output/content_encoder_{iteration}')
+        torch.save(decoder.state_dict(), f'output/decoder_{iteration}')
+
+    if iteration % 100 == 1:
+
+        residual = (t - content_representation)
+        res_mean, res_std = function.instance_mean_and_std(residual)
+        print(f'\nMean residual {res_mean.mean():.4f}, Std residual {res_std.mean():.4f}')
+
+        for key, weight in STYLE_LOSS_WEIGHTS.items():
+            Gx = function.gram_matrix(features_style[key])
+            Gy = function.gram_matrix(features_transformed[key])
+            value = torch.nn.functional.mse_loss(Gx, Gy)
+            print(f'Style loss {weight}: {value}')
 
 
         running_perceptual_loss, running_style_loss, running_count = 0.0, 0.0, 0 # After each validation, reset running training losses
@@ -114,7 +139,7 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
             torch.save(decoder(content_representation).cpu(), f'output/{iteration}_0_reconstructed.pt')
             torch.save(transformed.cpu(), f'output/{iteration}_0_transformed.pt')
 
-
+            """
             for (content_image, content_path), (style_image, style_path) in data_loader_val:
                 val_iteration += 1
                 if val_iteration >= VAL_ITERATIONS: break
@@ -139,6 +164,7 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
                 torch.save(decoder(style_representation).cpu(), f'output/{iteration}_{val_iteration}_style_reconstruction.pt')
 
                 print(f'\rValidation {val_iteration:02d} : Perceptual loss {perceptual_loss / val_iteration:.4f}\tStyle loss {style_loss / val_iteration:.4f}', end='\r')
+            """
             print('\nValidation done.')
     
 
