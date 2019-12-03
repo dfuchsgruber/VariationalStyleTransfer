@@ -410,9 +410,9 @@ dmypy.json
 *.tar
 *.tar.gz
 
-*.jpg
-*.jpeg
-*.png
+#*.jpg
+#*.jpeg
+#*.png
 
 # Torch outputs
 *.pt
