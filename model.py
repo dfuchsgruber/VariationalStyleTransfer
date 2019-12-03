@@ -88,7 +88,7 @@ class Decoder(torch.nn.Module):
                 conv = torch.nn.modules.Conv2d(layer.out_channels, layer.in_channels, kernel_size=layer.kernel_size, 
                     stride=layer.stride, dilation=layer.dilation)
                 self.layers.append(conv)
-                self.layers.append(AdaInLayer())
+                #self.layers.append(AdaInLayer())
                 #self.layers.add_module(f'{idx}_IN', torch.nn.modules.InstanceNorm2d(layer.in_channels, affine=True))
                 conv_layer_added = True
             elif isinstance(layer, torch.nn.modules.MaxPool2d):

@@ -70,13 +70,13 @@ class ImageDataset(torch.utils.data.Dataset):
 def load_debug_content_dataset(resolution=64):
     """ Loads some debug content images. """
     random.seed(1337)
-    jpgs = list(map(str, list(Path("./dataset/content").rglob("*.jpg"))))
+    jpgs = list(map(str, list(Path("../dataset/content").rglob("*.jpg"))))
     random.shuffle(jpgs)
     return ImageDataset(jpgs[:1000], resolution=resolution)
 
 def load_debug_style_dataset(resolution=64):
     """ Loads some debug style images. """
-    return ImageDataset(list_images('dataset/debug/style'), resolution=resolution)
+    return ImageDataset(list_images('../dataset/debug/style'), resolution=resolution)
 
 class DatasetPairIterator:
     """ Iterator that endlessly yields pairs of images. """
