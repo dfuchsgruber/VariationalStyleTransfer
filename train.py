@@ -7,6 +7,9 @@ import torch
 VAL_PORTION = 0.2
 ITERATIONS = 5000
 VAL_ITERATIONS = 10
+RESOLUTION = 64
+STYLE_DIM = 1024
+BATCH_SIZE = 1
 
 CONTENT_LOSS_WEIGHTS = {
     'relu_4_2' : 1.0,
@@ -20,40 +23,68 @@ STYLE_LOSS_WEIGHTS = {
     'relu_5_1' : 1e3,
 }
 
-content_encoder = model.Encoder(pretrained=True)
-content_encoder.load_state_dict(torch.load('output/content_encoder_2501')) #'output/content_encoder_pretrained'))
-#style_encoder = model.Encoder(pretrained=True)
-decoder = model.Decoder()
-decoder.load_state_dict(torch.load('output/decoder_2501')) #'output/decoder_pretrained'))
-loss_net = loss.LossNet()
-loss_net.eval()
-
-data_style = data.load_debug_style_dataset(resolution=64)
+data_style = data.load_debug_dataset('../dataset/debug/style', resolution=RESOLUTION)
 data_style_train, data_style_val = torch.utils.data.random_split(data_style, [len(data_style) - int(VAL_PORTION * len(data_style)), int(VAL_PORTION * len(data_style))])
-data_loader_style_train = DataLoader(data_style_train, batch_size=4, shuffle=True, drop_last=True)
-data_loader_style_val = DataLoader(data_style_val, batch_size=4, shuffle=True, drop_last=True)
+data_loader_style_train = DataLoader(data_style_train, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+data_loader_style_val = DataLoader(data_style_val, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
-data_content = data.load_debug_content_dataset(resolution=64)
+data_content = data.load_debug_dataset('../dataset/debug/content', resolution=RESOLUTION)
 data_content_train, data_content_val = torch.utils.data.random_split(data_content, [len(data_content) - int(VAL_PORTION * len(data_content)), int(VAL_PORTION * len(data_content))])
-data_loader_content_train = DataLoader(data_content_train, batch_size=4, shuffle=True, drop_last=True)
-data_loader_content_val = DataLoader(data_content_val, batch_size=4, shuffle=True, drop_last=True)
+data_loader_content_train = DataLoader(data_content_train, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+data_loader_content_val = DataLoader(data_content_val, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
 data_loader_train = data.DatasetPairIterator(data_loader_content_train, data_loader_style_train)
 data_loader_val = data.DatasetPairIterator(data_loader_content_val, data_loader_style_val)
 
 
+content_encoder = model.Encoder((3, RESOLUTION, RESOLUTION), pretrained=True)
+style_encoder = model.Encoder((3, RESOLUTION, RESOLUTION), pretrained=True, flattened_output_dim=STYLE_DIM)
+decoder = model.Decoder(STYLE_DIM)
+loss_net = loss.LossNet()
+loss_net.eval()
+
+def forward(content, style, content_encoder, style_encoder, decoder):
+    """ Forwards a batch through the pipeline.
+    
+    Parameters:
+    -----------
+    content : torch.Tensor, shape [B, C, H, W]
+        The content image.
+    style : torch.Tensor, shape [B, C, H', W']
+        The style image, usually H' = H and W' = W.
+    content_encoder : torch.nn.modules.Module
+        Encoder for content images.
+    style_encoder : torch.nn.modules.Module
+        Encoder for style images.
+    decoder : torch.nn.modules.Module
+        Decoder that uses AdaIn to decode the content and apply the style.
+
+    Returns:
+    --------
+    reco : torch.Tensor, shape [B, C, H, W]
+        A reconstruction of the content after application of the style.
+    style_representation : torch.Tensor, shape [B, D]
+        The latent style representation.
+    """
+    content_representation = content_encoder(content)
+    style_representation = style_encoder(style)
+    reco = decoder(content_representation, style_representation)
+    return reco, style_representation
+
+
+
 # Networks to CUDA device
 if torch.cuda.is_available(): 
     content_encoder = content_encoder.cuda()
-    #style_encoder = style_encoder.cuda()
+    style_encoder = style_encoder.cuda()
     decoder = decoder.cuda()
     loss_net = loss_net.cuda()
 
 trainable_parameters = []
 for parameter in content_encoder.parameters():
     trainable_parameters.append(parameter)
-#for parameter in style_encoder.parameters():
-#    trainable_parameters.append(parameter)
+for parameter in style_encoder.parameters():
+    trainable_parameters.append(parameter)
 for parameter in decoder.parameters():
     trainable_parameters.append(parameter)
 
@@ -69,7 +100,7 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
     iteration += 1
     
     content_encoder.train()
-    #style_encoder.train()
+    style_encoder.train()
     decoder.train()
 
 
@@ -78,12 +109,8 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
         content_image = content_image.to('cuda')
         style_image = style_image.to('cuda')
 
-    content_representation = content_encoder(content_image)
-    style_representation = content_encoder(style_image)
-    #style_representation = style_encoder(style_image)
-
-    t = function.adain(content_representation, style_representation)
-    transformed = decoder(t, style_representation)
+   
+    transformed, style_representation = forward(content_image, style_image, content_encoder, style_encoder, decoder)
 
     features_content = loss_net(content_image)
     features_style = loss_net(style_image)
@@ -110,22 +137,17 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
 
     if iteration % 100 == 1:
 
-        residual = (t - content_representation)
-        res_mean, res_std = function.instance_mean_and_std(residual)
-        print(f'\nMean residual {res_mean.mean():.4f}, Std residual {res_std.mean():.4f}')
-
         for key, weight in STYLE_LOSS_WEIGHTS.items():
             Gx = function.gram_matrix(features_style[key])
             Gy = function.gram_matrix(features_transformed[key])
             value = torch.nn.functional.mse_loss(Gx, Gy)
-            print(f'Style loss {weight}: {value}')
-
+            print(f'Style loss {key} with weight {weight:.4f}: {value:.4f}')
 
         running_perceptual_loss, running_style_loss, running_count = 0.0, 0.0, 0 # After each validation, reset running training losses
         print(f'\nValidating...')
 
         content_encoder.eval()
-        #style_encoder.eval()
+        style_encoder.eval()
         decoder.eval()
         perceptual_loss = 0.0
         style_loss = 0.0
@@ -135,8 +157,6 @@ for (content_image, content_path), (style_image, style_path) in data_loader_trai
 
             torch.save(content_image.cpu(), f'output/{iteration}_0_content.pt')
             torch.save(style_image.cpu(), f'output/{iteration}_0_style.pt')
-            torch.save(decoder(style_representation).cpu(), f'output/{iteration}_0_style_reconstructed.pt')
-            torch.save(decoder(content_representation).cpu(), f'output/{iteration}_0_reconstructed.pt')
             torch.save(transformed.cpu(), f'output/{iteration}_0_transformed.pt')
 
             """

@@ -39,7 +39,7 @@ def vgg_normalization_undo(image):
 
 class ImageDataset(torch.utils.data.Dataset):
 
-    def __init__(self, paths, resolution=64):
+    def __init__(self, paths, resolution=64, random_cropping=True, random_flipping=True):
         """ Initializes the dataset.
         
         Parameters:
@@ -48,14 +48,21 @@ class ImageDataset(torch.utils.data.Dataset):
             A list of images that form the dataset.
         resolution : int
             Resizes (and random crops for non-square images) to a image of size resolution x resolution
+        random_cropping : bool
+            If True, a random region will be cropped randomly, else it will be cropped from the center.
+        random_flipping : bool
+            If True, the image may be flipped horizontally.
         """
         self.paths = paths
-        self.transformations=transforms.Compose([
-            		         transforms.Resize(resolution),
-            		         transforms.RandomCrop(resolution),
-                             transforms.RandomHorizontalFlip(),
-            		         transforms.ToTensor(),
-                             vgg_normalization,])
+        transformations = [transforms.Resize(resolution)]
+        if random_cropping:
+            transformations.append(transforms.RandomCrop(resolution))
+        else:
+            transformations.append(transforms.CenterCrop(resolution))
+        if random_flipping:
+            transformations.append(transforms.RandomHorizontalFlip())
+        transformations += [transforms.ToTensor(), vgg_normalization]
+        self.transformations=transforms.Compose(transformations)
 
     def __getitem__(self, idx):
         image = Image.open(self.paths[idx]).convert('RGB') # Use a RGB instead of an RGBA image
@@ -67,16 +74,16 @@ class ImageDataset(torch.utils.data.Dataset):
         return len(self.paths)
 
 
-def load_debug_content_dataset(resolution=64):
+def load_dataset(directory, resolution=64, seed=1337):
     """ Loads some debug content images. """
-    random.seed(1337)
-    jpgs = list(map(str, list(Path("../dataset/content").rglob("*.jpg"))))
+    random.seed(seed)
+    jpgs = list(map(str, list(Path(directory).rglob("*.jpg"))))
     random.shuffle(jpgs)
-    return ImageDataset(jpgs[:1000], resolution=resolution)
+    return ImageDataset(jpgs, resolution=resolution, random_cropping=True, random_flipping=True)
 
-def load_debug_style_dataset(resolution=64):
+def load_debug_dataset(directory, resolution=64, number_instances=100000000):
     """ Loads some debug style images. """
-    return ImageDataset(list_images('../dataset/debug/style'), resolution=resolution)
+    return ImageDataset(list_images(directory)[:number_instances], resolution=resolution, random_cropping=False, random_flipping=False)
 
 class DatasetPairIterator:
     """ Iterator that endlessly yields pairs of images. """

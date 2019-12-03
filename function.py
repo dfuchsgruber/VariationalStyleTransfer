@@ -91,3 +91,28 @@ def adain(x, y):
     #print(x.mean(), y.mean(), x_mean.mean(), x_std.mean(), y_mean.mean(), y_std.mean())
     #exit(0)
     return x
+
+def adain_with_coefficients(x, mean, std):
+    """ Applies Adaptive Instance Normalization given a offset and scaling parameter. 
+    
+    Parameters:
+    -----------
+    x : torch.Tensor, shape [B, C, H, W]
+        The tensor to be transformed.
+    mean : torch.Tensor, shape [B, C]
+        Offset parameter to be applied to x.
+    std : torch.Tensor, shape [B, C]
+        Scaling parameter to be applied to x.
+    
+    Returns:
+    --------
+    z : torch.Tensor, shape [B, C, H, W]
+        Transformed version of x.
+    """
+    B, C, H, W = x.size()
+    x_mean, x_std = instance_mean_and_std(x)
+    x = (x - x_mean) / (x_std + 1e-12) # Normalize x
+    x *= std.view(B, C, 1, 1)
+    x += mean.view(B, C, 1, 1)
+    return x
+
