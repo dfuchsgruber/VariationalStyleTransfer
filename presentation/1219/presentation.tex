@@ -67,13 +67,16 @@
 Given a \textcolor{blue}{\textbf{content image} $C$} and an artistic \textcolor{Plum}{\textbf{style image $S$}}: 
 
 
-\vspace{20pt}
+\vspace{10pt}
 
 $\rightarrow$ \textbf{Stylization}: Image with content similar to \textcolor{blue}{\textbf{$C$}} and a style similar to \textcolor{Plum}{\textbf{$S$}} 
 
-\vspace{40pt}
-
-How to combine \textcolor{red}{\textbf{different styles}}?
+\vspace{20pt}
+\begin{itemize}
+\item How to combine \textcolor{red}{\textbf{different styles}}?
+\vspace{10pt}
+\item Generating \textcolor{red}{\textbf{new styles}}?
+\end{itemize}
 \end{large}
 
 \begin{figure}
@@ -96,7 +99,7 @@ How to combine \textcolor{red}{\textbf{different styles}}?
 	\item \textcolor{gray}{\cite{gatys}}: Optimize random image to fit \textcolor{blue}{\textbf{$C$}} content-wise and \textcolor{Plum}{\textbf{$S$}} style-wise $\rightarrow$ \textbf{\textcolor{red}{very slow!}}
 	\vspace{10pt}
 	
-	\item \textcolor{gray}{\cite{adain}}: \textbf{Autoencoders} to encode \textcolor{blue}{\textbf{$C$}} and \textcolor{Plum}{\textbf{$S$}}, use Adaptive Instance Normalization (\textbf{AdaIn}) to transfer the style
+	\item \textcolor{gray}{\cite{adain}}: \textbf{Autoencoders} to encode \textcolor{blue}{\textbf{$C$}} and \textcolor{Plum}{\textbf{$S$}}, use Adaptive Instance Normalization (\textbf{\textcolor{red}{AdaIn}}) to transfer the style
 	\vspace{10pt}
 	
 	\item \textcolor{gray}{\cite{disentanglement}}: Separate Encoders for \textcolor{blue}{\textbf{content}} and \textcolor{Plum}{\textbf{style}} \\ $\rightarrow$ \textcolor{red}{\textbf{Disentanglement}}
@@ -112,19 +115,26 @@ How to combine \textcolor{red}{\textbf{different styles}}?
 
 \end{frame}
 
+
+
 \begin{frame}
 \frametitle{Our Approach - Pipeline}
 \begin{figure}
 \centering
-\includegraphics[scale=0.3]{pipelinemodel.png}
+\includegraphics[scale=0.3]{pipelinemodel2.png}
 \end{figure}
 
 
 \begin{itemize}
 	\item \textcolor{blue}{\textbf{Content Encoder E-c}} and \textcolor{Plum}{\textbf{Style Encoder E-s}}
-	\vspace{10pt}
-	\item \textcolor{red}{\textbf{Random sampling}} from a Gaussian centered at \textcolor{Plum}{\textbf{style encoding}}
-	\vspace{10pt}
+	\item \textcolor{blue}{\textbf{AdaIn}} for style transfer
+\end{itemize}
+
+\textbf{Key contribution}:
+\begin{itemize}
+
+	\item \textcolor{red}{\textbf{Smooth latent style space}} due to \textbf{random sampling} (Variational Autoencoders)
+	\\ $\rightarrow$ \textbf{\textcolor{red}{Interpolation}} and \textbf{\textcolor{red}{style generation}}
 \end{itemize}
 
 \end{frame}
@@ -139,7 +149,7 @@ How to combine \textcolor{red}{\textbf{different styles}}?
 
 
 \begin{itemize}
-	\item \textcolor{blue}{\textbf{Content Loss}}: Perceptual loss using pretrained \textbf{VGG19} loss network
+	\item \textcolor{blue}{\textbf{Content Loss}}: Perceptual loss using pretrained \textbf{VGG19}
 	\vspace{10pt}
 \end{itemize}
 
@@ -230,7 +240,7 @@ Unfortunately, for \cite{disentanglement}, \textbf{\textcolor{red}{no implementa
 \begin{frame}
 \frametitle{Datasets}
 
-\textcolor{blue}{\textbf{Content images}}: Places365\footnote{\url{http://places2.csail.mit.edu/download.html}} dataset with different sceneries
+\textcolor{blue}{\textbf{Content images}}: Places365\footnote{\url{http://places2.csail.mit.edu/download.html}} 1.839.960 different sceneries
 
 \begin{multicols*}{3}
 
@@ -254,7 +264,7 @@ Unfortunately, for \cite{disentanglement}, \textbf{\textcolor{red}{no implementa
 
 
 
-\textcolor{Plum}{\textbf{Style images}}: WikiArt\footnote{\url{https://github.com/cs-chan/ArtGAN}} contains artistic images
+\textcolor{Plum}{\textbf{Style images}}: WikiArt\footnote{\url{https://github.com/cs-chan/ArtGAN}} contains 81.444 artistic images
 
 
 \begin{multicols*}{3}
@@ -278,7 +288,7 @@ Unfortunately, for \cite{disentanglement}, \textbf{\textcolor{red}{no implementa
 \end{multicols*}
 
 
-Lack of large GPU resources: $\rightarrow$ \textcolor{red}{\textbf{downsample}} images to a \textbf{64x64} resolution and only \textcolor{red}{\textbf{shallow}} networks.
+Lack of large GPU resources: $\rightarrow$ \textcolor{red}{\textbf{downsample}} images to a \textbf{256x256} resolution and only \textcolor{red}{\textbf{shallow}} networks.
 
 \end{frame}
 
@@ -311,7 +321,7 @@ We focus on \textbf{\textcolor{red}{interpolations between multiple styles}}!
 \frametitle{First Results}
 
 \begin{center}
-\textcolor{blue}{\textbf{content image}} \hspace{0.5cm}  \textcolor{Plum}{\textbf{style image}} \hspace{0.75cm} \textbf{Stylization}
+\textcolor{blue}{\textbf{Content Image}} \hspace{0.5cm}  \textcolor{Plum}{\textbf{Style Image}} \hspace{0.75cm} \textbf{Stylization}
 
 \begin{figure}
 	\includegraphics[width=1.0\linewidth]{scream_adain_3001.png}
@@ -333,18 +343,17 @@ We focus on \textbf{\textcolor{red}{interpolations between multiple styles}}!
 What we want to achieve until the next presentation:
 	\vspace{10pt}
 \begin{itemize}
-	\item Get the \textcolor{Plum}{\textbf{style transfer}} working
-	\vspace{10pt}
 	\item Implement the \textcolor{Plum}{\textbf{disentanglement loss}}
-	\vspace{10pt}
 	\item Implement \textcolor{red}{\textbf{sampling}} from a latent style distribution
-	\vspace{10pt}
-	\item Fine-tune the architecture and train a final evaluation-ready model
-	\vspace{10pt}
-	\item (Possibly) set up a \textcolor{blue}{\textbf{survey}} and \textcolor{blue}{\textbf{participants}} for our evaluation
-	\\
-	This includes getting \textbf{baselines} running as well
+	\item Train model on \textbf{\textcolor{Plum}{entire dataset}}
+	\item Fine-tune \textbf{loss weights} $\rightarrow$ model for evaluation
 \end{itemize}
+
+After that:	
+	\begin{itemize}
+	\item Compare to \textbf{\textcolor{blue}{baseline results}}
+	\item Set up a \textcolor{blue}{\textbf{survey}} and \textcolor{blue}{\textbf{participants}} for our evaluation
+	\end{itemize}
 \end{frame}
 
 \begin{frame}
@@ -419,11 +428,11 @@ The \textbf{\textcolor{Plum}{style loss}} is given as the \textbf{\textcolor{blu
 \end{frame}
 
 \begin{frame}
-	\frametitle{Style Loss}
+	\frametitle{Disentanglement Loss}
 
 
 Try to \textbf{\textcolor{red}{disentangle content and style}}:\\
-$\rightarrow$ Minimize influence of content on style representation
+$\rightarrow$ Minimize influence of content on style representation \cite{disentanglement}
 
 \vspace{10pt}
 
@@ -444,19 +453,15 @@ Enforces two stylizations of \textbf{same style} to be \textbf{\textcolor{blue}{
 
 \vspace{10pt}
 
-\cite{adain} showed that $\mu$ and $\sigma$ \textbf{\textcolor{Plum}{encapsulate style information}}:
+$\mu$ and $\sigma$ \textbf{\textcolor{Plum}{encapsulate style information}} \cite{adain}:
 \vspace{10pt}
 $\rightarrow$ \textbf{Adaptive Instance Normalization}:
 \begin{equation*}
-	\text{AdaIn}(x, y) = \sigma(y) \frac{x - \mu(x)}{\sigma(x)} + \mu(y)
+	\text{AdaIn}(x, y) = \hat{\sigma} \frac{x - \mu(x)}{\sigma(x)} + \hat{\mu}
 \end{equation*}
 \vspace{10pt}
 
-\textbf{\textcolor{red}{transfers instance-wise statistics}} from $y$ to $x$
-
-\vspace{10pt}
-
-\textbf{No learnable parameters!}
+$\hat{\mu}$ and $\hat{\sigma}$ are derived from \textbf{\textcolor{red}{style encoding}}
 
 \end{frame}
 
