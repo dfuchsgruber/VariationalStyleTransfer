@@ -118,3 +118,8 @@ class DatasetPairIterator:
             self.dataset_style_iterator = iter(self.dataset_style)
             style = next(self.dataset_style_iterator)
         return content, style
+
+    def reset(self):
+        """ Resets iterator states for both dataset. """
+        self.dataset_content_iterator = iter(self.dataset_content)
+        self.dataset_style_iterator = iter(self.dataset_style)
