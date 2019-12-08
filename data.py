@@ -12,7 +12,7 @@ from PIL import Image
 
 def list_images(directory, extensions=('.png', '.jpeg', '.jpg')):
     """ Lists all images in a directory. """
-    return [os.path.join(directory,filename) for filename in os.listdir(directory) if any(filename.endswith(extension) for extension in extensions)]
+    return [os.path.join(dirpath, filename) for dirpath, dirname, filenames in os.walk(directory) for filename in filenames if any(filename.endswith(extension) for extension in extensions)]
 
 # VGG19 was trained on images that were normalized with these values
 vgg_normalization_mean = np.array([0.485, 0.456, 0.406])

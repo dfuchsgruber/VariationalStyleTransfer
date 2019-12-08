@@ -78,7 +78,7 @@ class Encoder(torch.nn.Module):
 class AdaInLayer(torch.nn.Module):
     """ Layer that applies adaptive instance normalization. """
 
-    def __init__(self, input_dim, num_channels):
+    def __init__(self, input_dim, num_channels, idx):
         """ Initializes an AdaIn layer that takes a style encoding as input, applies an affine transformation to it and passes
         mean and standard deviation coefficients to Adaptive Instance Normalization. 
         
@@ -92,7 +92,9 @@ class AdaInLayer(torch.nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.num_channels = num_channels
-        self.transformation = torch.nn.modules.Linear(input_dim, num_channels * 2)
+        self.idx = idx
+        #self.transformation_mean = torch.nn.modules.Linear(input_dim, num_channels)
+        #self.transformation_std = torch.nn.modules.Linear(input_dim, num_channels)
     
     def forward(self, x, style_encoding):
         """ Applies the affine coefficients of y to x.
@@ -109,9 +111,18 @@ class AdaInLayer(torch.nn.Module):
         x' : torch.Tensor, shape [B, C, H, W]
             The transformed version of x.
         """
-        coefs = self.transformation(style_encoding)
-        mean = coefs[:, : self.num_channels]
-        std = coefs[:, self.num_channels : ]
+        B, C, H, W = x.size()
+        #mean = self.transformation_mean(style_encoding)
+        #std = self.transformation_std(style_encoding)
+        mean = style_encoding[:, self.idx : self.idx + self.num_channels]
+        std = style_encoding[:, self.idx + self.num_channels : self.idx + (2 * self.num_channels)]
+
+        #x_var, x_mean = torch.var_mean(style_encoding, -1, keepdim=True)
+        #x_std = x_var.sqrt()
+
+        #print(style_encoding.shape)
+        #print(x_std.shape)
+
         transformed = function.adain_with_coefficients(x, mean, std)
         return transformed
 
@@ -119,7 +130,7 @@ class AdaInLayer(torch.nn.Module):
 class Decoder(torch.nn.Module):
     """ Decoder network that mirrors the structure of an encoder architecture. """
 
-    def __init__(self, style_dim, n_layers=19, architecture=torchvision.models.vgg19):
+    def __init__(self, n_layers=19, architecture=torchvision.models.vgg19):
         """ Initializes a decoder model that tries to mirror the encoder architecture.
         
         Parameters:
@@ -133,6 +144,7 @@ class Decoder(torch.nn.Module):
         """
         super().__init__()
         self.layers = torch.nn.modules.ModuleList()
+        #slice_idx = 0
         conv_layer_added = False # The first layer should be a convolution, ignore the first layers that are non convolutional
         for idx, layer in enumerate(reversed(architecture(pretrained=False, progress=True).features[:n_layers])):
             if isinstance(layer, torch.nn.modules.Conv2d):
@@ -140,7 +152,9 @@ class Decoder(torch.nn.Module):
                 conv = torch.nn.modules.Conv2d(layer.out_channels, layer.in_channels, kernel_size=layer.kernel_size, 
                     stride=layer.stride, dilation=layer.dilation)
                 self.layers.append(conv)
-                self.layers.append(AdaInLayer(style_dim, conv.out_channels))
+                #self.layers.append(AdaInLayer(style_dim, conv.out_channels, slice_idx))
+                #slice_idx += conv.out_channels * 2
+                #print(slice_idx)
                 conv_layer_added = True
             elif isinstance(layer, torch.nn.modules.MaxPool2d):
                 self.layers.append(torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
