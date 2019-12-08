@@ -92,6 +92,34 @@ def adain(x, y):
     #exit(0)
     return x
 
+def adain_mean_std(x, mean, std):
+    """ Applies Adaptive instance normalization to x with the affine parameters of y. Both mean and variance 
+    of per channel and instance in a batch (i.e. the summation is done over the image dimensions only) are 
+    calculated for x and y. Afterwards, x is zero-centered and normalized to have a scale of 1.0. 
+    Lastly, the centered \bar{x} is shifted by the mean and scaled by the standard deviation obtained by
+    the instance normalization of y.
+
+    Parameters:
+    -----------
+    x : torch.Tensor, shape [B, C, H, W]
+        The tensor which is to be normalized and transformed.
+    y : torch.Tensor, shape [B, C, H', W']
+        The tensor from which the affine transformation is gained.
+
+    Returns:
+    --------
+    z : torch.Tensor, shape [B, C, H, W]
+        The transformed version of x.
+    """
+    x_mean, x_std = instance_mean_and_std(x)
+    x = x - x_mean # Centering
+    x /= x_std + 1e-12 # Normalizing
+    x *= std # Scaling
+    x += mean # Offseting
+    #print(x.mean(), y.mean(), x_mean.mean(), x_std.mean(), y_mean.mean(), y_std.mean())
+    #exit(0)
+    return x
+
 def adain_with_coefficients(x, mean, std):
     """ Applies Adaptive Instance Normalization given a offset and scaling parameter. 
     
