@@ -143,7 +143,7 @@ class VGGEncoder(torch.nn.Module):
     """
     
     
-    def __init__(self, input_dim, n_layers=19, architecture=torchvision.models.vgg19, pretrained=True, flattened_output_dim=None):
+    def __init__(self, input_dim, n_layers=19, architecture=torchvision.models.vgg19, pretrained=True, flattened_output_dim=None, mean_std_projection=False):
         """ Initializes an encoder model based on some (pretrained) architecture. 
         
         Parameters:
@@ -163,9 +163,15 @@ class VGGEncoder(torch.nn.Module):
         super().__init__()
         self.layers = architecture(pretrained=pretrained, progress=True).features[:n_layers]
         self.flattened_output_dim = flattened_output_dim
+        self.mean_std_projection = mean_std_projection
         if self.flattened_output_dim:
             C_out, W_out, H_out = self.output_dim(input_dim)
             self.projection = torch.nn.modules.Linear(H_out * W_out * C_out, self.flattened_output_dim)
+        if self.mean_std_projection:
+            C_out, W_out, H_out = self.output_dim(input_dim)
+            self.projection_mean = torch.nn.modules.Linear(H_out * W_out * C_out, 1)
+            self.projection_std = torch.nn.modules.Linear(H_out * W_out * C_out, 1)
+
         
 
 
@@ -186,6 +192,11 @@ class VGGEncoder(torch.nn.Module):
         if self.flattened_output_dim:
             B = output.size()[0]
             output = self.projection(output.view(B, -1))
+        if self.mean_std_projection:
+            B = output.size()[0]
+            mean = self.projection_mean(output.view(B, -1))
+            var = self.projection_std(output.view(B, -1))
+            output = (mean, var)
         return output
 
     def output_dim(self, input_dim):
@@ -242,9 +253,17 @@ class AdaInLayer(torch.nn.Module):
             The transformed version of x.
         """
         B, C, H, W = x.size()
+<<<<<<< HEAD
         affine_params = self.fc(style_encoding)
         mean = affine_params[:, : self.num_channels]
         std = affine_params[:, self.num_channels : ]
+=======
+        #mean = self.transformation_mean(style_encoding)
+        #std = self.transformation_std(style_encoding)
+        mean = style_encoding[:, self.idx : self.idx + self.num_channels]
+        std = style_encoding[:, self.idx + self.num_channels : self.idx + (2 * self.num_channels)]
+
+>>>>>>> e997552c9500011202c2d52aa116336fb0391f40
         transformed = function.adain_with_coefficients(x, mean, std)
         return transformed
 
@@ -277,6 +296,7 @@ class VGGDecoder(torch.nn.Module):
                 #self.layers.append(AdaInLayer(style_dim, conv.out_channels, slice_idx))
                 #slice_idx += conv.out_channels * 2
                 #print(slice_idx)
+                self.layers.append(torch.nn.InstanceNorm2d(conv.out_channels, affine=True))
                 conv_layer_added = True
             elif isinstance(layer, torch.nn.modules.MaxPool2d):
                 self.layers.append(torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
