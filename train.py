@@ -8,7 +8,8 @@ VAL_PORTION = 0.2
 ITERATIONS = 5000
 VAL_ITERATIONS = 10
 RESOLUTION = 64
-STYLE_DIM = 1024
+CONTENT_DIM = 512
+STYLE_DIM = 512
 BATCH_SIZE = 1
 
 CONTENT_LOSS_WEIGHTS = {
@@ -37,9 +38,9 @@ data_loader_train = data.DatasetPairIterator(data_loader_content_train, data_loa
 data_loader_val = data.DatasetPairIterator(data_loader_content_val, data_loader_style_val)
 
 
-content_encoder = model.Encoder((3, RESOLUTION, RESOLUTION), pretrained=True)
-style_encoder = model.Encoder((3, RESOLUTION, RESOLUTION), pretrained=True, flattened_output_dim=STYLE_DIM)
-decoder = model.Decoder(STYLE_DIM)
+content_encoder = model.ResNetEncoder(CONTENT_DIM)
+style_encoder = model.ResNetEncoder(STYLE_DIM)
+decoder = model.Decoder(CONTENT_DIM, STYLE_DIM, (RESOLUTION, RESOLUTION))
 loss_net = loss.LossNet()
 loss_net.eval()
 

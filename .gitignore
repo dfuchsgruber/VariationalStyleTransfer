@@ -419,3 +419,6 @@ dmypy.json
 
 # Notebooks
 *.ipynb
+
+log/
+output/
