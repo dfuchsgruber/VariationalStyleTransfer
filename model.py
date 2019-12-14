@@ -1,6 +1,6 @@
 import torchvision.models
 import torch
-import function
+import function, blocks
 import torch.nn.functional as F
 
 
@@ -47,7 +47,7 @@ class Decoder(torch.nn.Module):
         -----------
         content_dim : int
             The content embedding dimensionality.
-        style_dim : int
+        style_dim : int or None
             The style embedding dimensionality.
         resolution : int or tuple of ints (H, W)
             The output resolution, a multiple of 32.
@@ -59,32 +59,27 @@ class Decoder(torch.nn.Module):
         self.resolution = resolution
         self.content_dim = content_dim
         self.style_dim = style_dim
-        self.fc = torch.nn.Linear(self.content_dim, (resolution[0] // 32) * (resolution[1] // 32) * 512)
+        if self.style_dim is None:
+            normalization = 'in'
+        else:
+            normalization = 'adain'
 
-        self.adain4 = AdaInLayer(self.style_dim, 512)
-        self.adain3 = AdaInLayer(self.style_dim, 512)
-        self.adain2 = AdaInLayer(self.style_dim, 256)
-        self.adain1 = AdaInLayer(self.style_dim, 128)
-
-        """    
-        self.upsample1 = torch.nn.UpsamplingNearest2d(scale_factor=2)
-        self.pad = torch.nn.ReflectionPad2d(1)
-        self.conv4 = torch.nn.Conv2d(512, 512, (3, 3), stride=1, padding=0)
-        self.conv3 = torch.nn.Conv2d(512, 256, (3, 3), stride=1, padding=0)
-        self.conv2 = torch.nn.Conv2d(256, 128, (3, 3), stride=1, padding=0)
-        self.conv1 = torch.nn.Conv2d(128, 64, (3, 3), stride=1, padding=0)
-        # Two convolutions after last adaptive instance normalization layer
-        self.conv_0_1 = torch.nn.Conv2d(64, 64, (3, 3), stride=1, padding=0)
-        self.conv_0_2 = torch.nn.Conv2d(64, 3, (3, 3), stride=1, padding=0)
-        """
-
-        self.tconv4 = torch.nn.ConvTranspose2d(512, 256, kernel_size=(3, 3), stride=2, padding=1, output_padding=1, dilation=1)
-        self.tconv3 = torch.nn.ConvTranspose2d(256, 128, kernel_size=(3, 3), stride=2, padding=1, output_padding=1, dilation=1)
-        self.tconv2 = torch.nn.ConvTranspose2d(128, 64, kernel_size=(3, 3), stride=2, padding=1, output_padding=1, dilation=1)
-        self.tconv1 = torch.nn.ConvTranspose2d(64, 3, kernel_size=(3, 3), stride=2, padding=1, output_padding=1, dilation=1)
+        if isinstance(self.content_dim, int):
+            self.fc = torch.nn.Sequential(
+                torch.nn.Linear(self.content_dim, 4096),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Linear(4096, (resolution[0] // 32) * (resolution[1] // 32) * 512),
+                torch.nn.ReLU(inplace=True),
+            )
+        self.up5 = blocks.UpsamplingConvolution(512, 512, instance_normalization=normalization)
+        self.up4 = blocks.UpsamplingConvolution(512, 256, instance_normalization=normalization)
+        self.up3 = blocks.UpsamplingConvolution(256, 128, instance_normalization=normalization)
+        self.up2 = blocks.UpsamplingConvolution(128, 64, instance_normalization=normalization)
+        self.up1 = blocks.UpsamplingConvolution(64, 3, instance_normalization=None)
 
 
-    def forward(self, content_encoding, style_encoding):
+
+    def forward(self, content_encoding, style_encoding=None):
         """ Forward pass.
         
         Parameters:
@@ -100,36 +95,18 @@ class Decoder(torch.nn.Module):
             The stylized output image, where H and W are specified by the resolution given to the decoder initialization.
         """
 
-        x = self.fc(content_encoding).view(-1, 512, self.resolution[0] // 32, self.resolution[1] // 32)
-        x = F.relu(x, inplace=True)
+        if isinstance(self.content_dim, int): 
+            x = self.fc(content_encoding).view(-1, 512, self.resolution[0] // 32, self.resolution[1] // 32)
+        else:
+            x = content_encoding
 
-        x = self.upsample1(x)
-        x = F.relu(self.tconv4(x), inplace=True)
-        x = F.relu(self.tconv3(x), inplace=True)
-        x = F.relu(self.tconv2(x), inplace=True)
-        x = F.relu(self.tconv1(x), inplace=True)
+        x = self.up5(x, style_encoding)
+        x = self.up4(x, style_encoding)
+        x = self.up3(x, style_encoding)
+        x = self.up2(x, style_encoding)
+        x = self.up1(x, style_encoding)
 
-        """
-        if style_encoding is not None: x = self.adain4(x, style_encoding)
-        x = self.upsample1(x)
-        x = F.relu(self.conv4(self.pad(x)), inplace=True)
-        
-        if style_encoding is not None: x = self.adain3(x, style_encoding)
-        x = self.upsample1(x)
-        x = F.relu(self.conv3(self.pad(x)), inplace=True)
-
-        if style_encoding is not None: x = self.adain2(x, style_encoding)
-        x = self.upsample1(x)
-        x = F.relu(self.conv2(self.pad(x)), inplace=True)
-
-        if style_encoding is not None: x = self.adain1(x, style_encoding)
-        x = self.upsample1(x)
-        x = F.relu(self.conv1(self.pad(x)), inplace=True)
-
-        x = self.upsample1(x)
-        x = F.relu(self.conv_0_1(self.pad(x)), inplace=True)
-        x = F.relu(self.conv_0_2(self.pad(x)), inplace=True)
-        """
+        x = torch.sigmoid(x)
 
         return x
 
@@ -166,6 +143,7 @@ class VGGEncoder(torch.nn.Module):
         self.mean_std_projection = mean_std_projection
         if self.flattened_output_dim:
             C_out, W_out, H_out = self.output_dim(input_dim)
+            print(C_out, W_out, H_out)
             self.projection = torch.nn.modules.Linear(H_out * W_out * C_out, self.flattened_output_dim)
         if self.mean_std_projection:
             C_out, W_out, H_out = self.output_dim(input_dim)
@@ -218,54 +196,6 @@ class VGGEncoder(torch.nn.Module):
         return C_out, H // 2**num_poolings, W // 2**num_poolings
         
 
-class AdaInLayer(torch.nn.Module):
-    """ Layer that applies adaptive instance normalization. """
-
-    def __init__(self, style_dim, num_channels):
-        """ Initializes an AdaIn layer that takes a style encoding as input, applies an affine transformation to it and passes
-        mean and standard deviation coefficients to Adaptive Instance Normalization. 
-        
-        Parameters:
-        -----------
-        style_dim : int
-            Dimensionality of the style encoding.
-        num_channels : int
-            How many channels the input map to be transformed has.
-        """
-        super().__init__()
-        self.style_dim = style_dim
-        self.num_channels = num_channels
-        self.fc = torch.nn.Linear(self.style_dim, 2 * self.num_channels)
-    
-    def forward(self, x, style_encoding):
-        """ Applies learned affine coefficients to x using the style encoding.
-        
-        Parameters:
-        -----------
-        x : torch.Tensor, shape [B, C, H, W]
-            The feature map to be transformed.
-        style_encoding : torch.Tensor, shape [B, style_encoding_dim]
-            The style encoding tensor.
-
-        Returns:
-        --------
-        x' : torch.Tensor, shape [B, C, H, W]
-            The transformed version of x.
-        """
-        B, C, H, W = x.size()
-<<<<<<< HEAD
-        affine_params = self.fc(style_encoding)
-        mean = affine_params[:, : self.num_channels]
-        std = affine_params[:, self.num_channels : ]
-=======
-        #mean = self.transformation_mean(style_encoding)
-        #std = self.transformation_std(style_encoding)
-        mean = style_encoding[:, self.idx : self.idx + self.num_channels]
-        std = style_encoding[:, self.idx + self.num_channels : self.idx + (2 * self.num_channels)]
-
->>>>>>> e997552c9500011202c2d52aa116336fb0391f40
-        transformed = function.adain_with_coefficients(x, mean, std)
-        return transformed
 
 
 class VGGDecoder(torch.nn.Module):
@@ -323,7 +253,7 @@ class VGGDecoder(torch.nn.Module):
             Decoded images.
         """
         for layer in self.layers:
-            if isinstance(layer, AdaInLayer):
+            if isinstance(layer, blocks.AdaInBlock):
                 if style is not None:
                     content = layer(content, style)
             else:
