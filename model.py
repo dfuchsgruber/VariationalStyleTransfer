@@ -21,7 +21,7 @@ class ResNetEncoder(torch.nn.Module):
         """
         super().__init__()
         self.embedding_dim = embedding_dim
-        self.resnet = architecture(pretrained=pretrained)
+        self.resnet = torch.nn.Sequential(*list(architecture(pretrained=pretrained).children())[:-2])
         # Replace the fully connected layer that tries to predict 1000 class labels with a layer to the embedding dimensionality
         if architecture is torchvision.models.resnet18 or architecture is torchvision.models.resnet34 or architecture is torchvision.models.resnet152:
             fc_input_dim = 512
@@ -30,7 +30,7 @@ class ResNetEncoder(torch.nn.Module):
         else:
             raise NotImplementedError
 
-        self.resnet.fc = torch.nn.Linear(fc_input_dim, self.embedding_dim)
+        #self.resnet.fc = torch.nn.Linear(fc_input_dim, self.embedding_dim)
 
     def forward(self, x):
         return self.resnet(x)
@@ -60,7 +60,7 @@ class Decoder(torch.nn.Module):
         self.content_dim = content_dim
         self.style_dim = style_dim
         if self.style_dim is None:
-            normalization = 'in'
+            normalization = None
         else:
             normalization = 'adain'
 
@@ -112,7 +112,7 @@ class Decoder(torch.nn.Module):
 
 
 class VGGEncoder(torch.nn.Module):
-    """ Encoder network that contains of the first few layers of the vgg19 [1] network. 
+    """ Encoder network that contains of the first few layers of the vgg11 [1] network. 
     
     References:
     -----------
@@ -120,7 +120,7 @@ class VGGEncoder(torch.nn.Module):
     """
     
     
-    def __init__(self, input_dim, n_layers=19, architecture=torchvision.models.vgg19, pretrained=True, flattened_output_dim=None, mean_std_projection=False):
+    def __init__(self, input_dim, n_layers=1000, architecture=torchvision.models.vgg11, pretrained=True, flattened_output_dim=None, mean_std_projection=False):
         """ Initializes an encoder model based on some (pretrained) architecture. 
         
         Parameters:
@@ -142,9 +142,15 @@ class VGGEncoder(torch.nn.Module):
         self.flattened_output_dim = flattened_output_dim
         self.mean_std_projection = mean_std_projection
         if self.flattened_output_dim:
-            C_out, W_out, H_out = self.output_dim(input_dim)
-            print(C_out, W_out, H_out)
-            self.projection = torch.nn.modules.Linear(H_out * W_out * C_out, self.flattened_output_dim)
+            C_out, W_out, H_out = vgg_get_output_dim(self.layers, input_dim)
+            self.projection = torch.nn.Sequential(
+                torch.nn.modules.Linear(H_out * W_out * C_out, 4096),
+                torch.nn.Dropout(0.5, inplace=True),
+                torch.nn.ReLU(),
+                torch.nn.modules.Linear(4096, self.flattened_output_dim),
+                torch.nn.Dropout(0.5, inplace=True),
+                torch.nn.ReLU(),
+            )
         if self.mean_std_projection:
             C_out, W_out, H_out = self.output_dim(input_dim)
             self.projection_mean = torch.nn.modules.Linear(H_out * W_out * C_out, 1)
@@ -177,31 +183,32 @@ class VGGEncoder(torch.nn.Module):
             output = (mean, var)
         return output
 
-    def output_dim(self, input_dim):
-        """ Calculates the output dimensionality of the encoder structure. 
-        
-        Parameters:
-        -----------
-        input_dim : int, int, int
-            Number of channels, input height and input width.
-        
-        Returns:
-        --------
-        output_dim : int, int, int
-            Number of channels, output height and output width.
-        """
-        C, H, W = input_dim
-        num_poolings = sum(map(lambda layer: isinstance(layer, torch.nn.modules.MaxPool2d), self.layers))
-        C_out = list(filter(lambda layer: isinstance(layer, torch.nn.modules.Conv2d), self.layers))[-1].out_channels
-        return C_out, H // 2**num_poolings, W // 2**num_poolings
-        
-
+   
+def vgg_get_output_dim(layers, input_dim):
+    """ Dynamically calculates the output dimensionality of a sequential architecture. 
+    
+    Parameters:
+    -----------
+    layers : iterable of torch.nn.Module
+        A set of layers that are applied to the image. MaxPool2ds are considered.
+    input_dim : int, int, int
+        Channel, Height and Width of the input image.
+    
+    Returns:
+    --------
+    output_dim : int, int, int
+        Channel, Height and Width of the output image.
+    """
+    C, H, W = input_dim
+    num_poolings = sum(map(lambda layer: isinstance(layer, torch.nn.modules.MaxPool2d), layers))
+    C_out = list(filter(lambda layer: isinstance(layer, torch.nn.modules.Conv2d), layers))[-1].out_channels
+    return C_out, H // 2**num_poolings, W // 2**num_poolings
 
 
 class VGGDecoder(torch.nn.Module):
     """ Decoder network that mirrors the structure of an encoder architecture. """
 
-    def __init__(self, n_layers=19, architecture=torchvision.models.vgg19):
+    def __init__(self, image_dim, style_dim, content_dim, n_layers=21, architecture=torchvision.models.vgg11):
         """ Initializes a decoder model that tries to mirror the encoder architecture.
         
         Parameters:
@@ -214,6 +221,22 @@ class VGGDecoder(torch.nn.Module):
             A torchvision architecture that allows the first n layers to be extracted for the decoder.
         """
         super().__init__()
+        self.image_dim = image_dim
+        self.content_dim = content_dim
+        self.style_dim = style_dim
+        
+        C_in, H_in, W_in = vgg_get_output_dim(architecture(pretrained=False, progress=True).features[:n_layers], self.image_dim)
+        self.input_dim = C_in, H_in, W_in # Input shape for the decoder convolutions
+        if isinstance(self.content_dim, int): #TODO: we should always input a flat vector...
+            self.fc = torch.nn.Sequential(
+                torch.nn.Linear(self.content_dim, 4096),
+                torch.nn.Dropout(0.5, inplace=True),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Linear(4096, C_in * H_in * W_in),
+                torch.nn.Dropout(0.5, inplace=True),
+                torch.nn.ReLU(inplace=True),
+            )
+
         self.layers = torch.nn.modules.ModuleList()
         #slice_idx = 0
         conv_layer_added = False # The first layer should be a convolution, ignore the first layers that are non convolutional
@@ -226,7 +249,7 @@ class VGGDecoder(torch.nn.Module):
                 #self.layers.append(AdaInLayer(style_dim, conv.out_channels, slice_idx))
                 #slice_idx += conv.out_channels * 2
                 #print(slice_idx)
-                self.layers.append(torch.nn.InstanceNorm2d(conv.out_channels, affine=True))
+                #self.layers.append(torch.nn.InstanceNorm2d(conv.out_channels, affine=True))
                 conv_layer_added = True
             elif isinstance(layer, torch.nn.modules.MaxPool2d):
                 self.layers.append(torch.nn.modules.UpsamplingNearest2d(scale_factor=layer.stride))
@@ -252,6 +275,9 @@ class VGGDecoder(torch.nn.Module):
         output : torch.Tensor, shape [batch_size, 3, width * scale, height * scale]
             Decoded images.
         """
+        if isinstance(self.content_dim, int):
+            C_in, H_in, W_in = self.input_dim
+            content = self.fc(content).view(-1, C_in, H_in, W_in)
         for layer in self.layers:
             if isinstance(layer, blocks.AdaInBlock):
                 if style is not None:
@@ -260,4 +286,5 @@ class VGGDecoder(torch.nn.Module):
                 content = layer(content)
 
         return content
+        #return torch.sigmoid(content)
     
