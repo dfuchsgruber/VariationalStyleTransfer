@@ -112,7 +112,7 @@ class Decoder(torch.nn.Module):
 
 
 class VGGEncoder(torch.nn.Module):
-    """ Encoder network that contains of the first few layers of the vgg11 [1] network. 
+    """ Encoder network that contains of the first few layers of the vgg19 [1] network. 
     
     References:
     -----------
@@ -120,7 +120,7 @@ class VGGEncoder(torch.nn.Module):
     """
     
     
-    def __init__(self, input_dim, n_layers=1000, architecture=torchvision.models.vgg11, pretrained=True, flattened_output_dim=None, mean_std_projection=False):
+    def __init__(self, input_dim, n_layers=19, architecture=torchvision.models.vgg19, pretrained=True, flattened_output_dim=None, mean_std_projection=False):
         """ Initializes an encoder model based on some (pretrained) architecture. 
         
         Parameters:
@@ -146,10 +146,10 @@ class VGGEncoder(torch.nn.Module):
             self.projection = torch.nn.Sequential(
                 torch.nn.modules.Linear(H_out * W_out * C_out, 4096),
                 torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(),
+                torch.nn.ReLU(inplace=True),
                 torch.nn.modules.Linear(4096, self.flattened_output_dim),
                 torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(),
+                torch.nn.ReLU(inplace=True),
             )
         if self.mean_std_projection:
             C_out, W_out, H_out = self.output_dim(input_dim)
@@ -208,7 +208,7 @@ def vgg_get_output_dim(layers, input_dim):
 class VGGDecoder(torch.nn.Module):
     """ Decoder network that mirrors the structure of an encoder architecture. """
 
-    def __init__(self, image_dim, style_dim, content_dim, n_layers=21, architecture=torchvision.models.vgg11):
+    def __init__(self, image_dim, style_dim, content_dim, n_layers=19, architecture=torchvision.models.vgg19):
         """ Initializes a decoder model that tries to mirror the encoder architecture.
         
         Parameters:
