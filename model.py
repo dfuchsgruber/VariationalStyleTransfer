@@ -71,10 +71,10 @@ class Decoder(torch.nn.Module):
                 torch.nn.Linear(4096, (resolution[0] // 32) * (resolution[1] // 32) * 512),
                 torch.nn.ReLU(inplace=True),
             )
-        self.up5 = blocks.UpsamplingConvolution(512, 512, instance_normalization=normalization)
-        self.up4 = blocks.UpsamplingConvolution(512, 256, instance_normalization=normalization)
-        self.up3 = blocks.UpsamplingConvolution(256, 128, instance_normalization=normalization)
-        self.up2 = blocks.UpsamplingConvolution(128, 64, instance_normalization=normalization)
+        self.up5 = blocks.UpsamplingConvolution(512, 512, instance_normalization=normalization, style_dim=style_dim)
+        self.up4 = blocks.UpsamplingConvolution(512, 256, instance_normalization=normalization, style_dim=style_dim)
+        self.up3 = blocks.UpsamplingConvolution(256, 128, instance_normalization=normalization, style_dim=style_dim)
+        self.up2 = blocks.UpsamplingConvolution(128, 64, instance_normalization=normalization, style_dim=style_dim)
         self.up1 = blocks.UpsamplingConvolution(64, 3, instance_normalization=None)
 
 
@@ -145,11 +145,12 @@ class VGGEncoder(torch.nn.Module):
             C_out, W_out, H_out = vgg_get_output_dim(self.layers, input_dim)
             self.projection = torch.nn.Sequential(
                 torch.nn.modules.Linear(H_out * W_out * C_out, 4096),
-                torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(inplace=True),
+                #torch.nn.Dropout(0.5, inplace=True),
+                #torch.nn.ReLU(inplace=True),
                 torch.nn.modules.Linear(4096, self.flattened_output_dim),
-                torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(inplace=True),
+                #torch.nn.Dropout(0.5, inplace=True),
+                #torch.nn.ReLU(inplace=True),
+                torch.nn.LayerNorm(self.flattened_output_dim) # this seems to help?
             )
         if self.mean_std_projection:
             C_out, W_out, H_out = self.output_dim(input_dim)
@@ -230,11 +231,11 @@ class VGGDecoder(torch.nn.Module):
         if isinstance(self.content_dim, int): #TODO: we should always input a flat vector...
             self.fc = torch.nn.Sequential(
                 torch.nn.Linear(self.content_dim, 4096),
-                torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(inplace=True),
+                #torch.nn.Dropout(0.5, inplace=True),
+                #torch.nn.ReLU(inplace=True),
                 torch.nn.Linear(4096, C_in * H_in * W_in),
-                torch.nn.Dropout(0.5, inplace=True),
-                torch.nn.ReLU(inplace=True),
+                #torch.nn.Dropout(0.5, inplace=True),
+                #torch.nn.ReLU(inplace=True),
             )
 
         self.layers = torch.nn.modules.ModuleList()
@@ -247,6 +248,7 @@ class VGGDecoder(torch.nn.Module):
                     stride=layer.stride, dilation=layer.dilation)
                 self.layers.append(conv)
                 #self.layers.append(AdaInLayer(style_dim, conv.out_channels, slice_idx))
+                self.layers.append(blocks.AdaInBlock(style_dim, conv.out_channels))
                 #slice_idx += conv.out_channels * 2
                 #print(slice_idx)
                 #self.layers.append(torch.nn.InstanceNorm2d(conv.out_channels, affine=True))
