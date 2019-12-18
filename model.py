@@ -12,8 +12,8 @@ class Encoder(torch.nn.Module):
         
         Parameters:
         -----------
-        output_dim : int
-            The size of the embedding.
+        output_dim : int or None
+            The size of the embedding. If None, the output is a downsampled batch of images with spatial extent.
         in_channels : int
             The number of input channels.
         normalization : bool
@@ -24,6 +24,7 @@ class Encoder(torch.nn.Module):
         super().__init__()
         self.normalization = normalization
         self.num_down_convolutions = num_down_convolutions
+        self.output_dim = output_dim
         dims = [min(512, 64*2**i) for i in range(num_down_convolutions)]
 
         self.convs = nn.ModuleList(
@@ -34,9 +35,10 @@ class Encoder(torch.nn.Module):
             self.norms = nn.ModuleList(
                 nn.InstanceNorm2d(c, affine=True) for c in dims
             )
-        
-        self.pool = nn.AdaptiveMaxPool2d((1, 1))
-        self.fc = nn.Linear(dims[-1], output_dim, bias=True)
+
+        if self.output_dim is not None:
+            self.pool = nn.AdaptiveMaxPool2d((1, 1))
+            self.fc = nn.Linear(dims[-1], output_dim, bias=True)
 
     def forward(self, x):
         """ Forward pass.
@@ -48,15 +50,17 @@ class Encoder(torch.nn.Module):
         
         Returns:
         --------
-        z : torch.Tensor, shape [B, output_dim]
+        z : torch.Tensor, shape [B, output_dim] or shape [B, channels_out, H'', W'']
+            Output image embedding.
         """
         out = x
         for idx in range(self.num_down_convolutions):
             out = self.convs[idx](out)
             if self.normalization:
                 out = self.norms[idx](out)
-        out = F.relu(self.pool(out), inplace=False)
-        out = self.fc(out.view(out.size(0), -1))
+        if self.output_dim is not None:
+            out = F.relu(self.pool(out), inplace=True)
+            out = self.fc(out.view(out.size(0), -1))
         return out
 
 class Decoder(torch.nn.Module):
@@ -97,7 +101,10 @@ class Decoder(torch.nn.Module):
             resolution = (resolution, resolution)
         self.in_height = resolution[0] // 2**self.num_up_convolutions
         self.in_width = resolution[1] // 2**self.num_up_convolutions
-        self.in_channels = dims[0] 
+        self.in_channels = dims[0]
+
+        if self.content_dim is not None:
+            self.fc = nn.Linear(self.content_dim, self.in_channels * self.in_width * self.in_height) 
 
         self.convs = nn.ModuleList(
             blocks.UpsamplingConvolution(c_in, c_out, style_dim=style_dim, instance_normalization=self.normalization, residual=self.residual)
@@ -105,14 +112,14 @@ class Decoder(torch.nn.Module):
         )
 
 
-    def forward(self, content_encoding, style_encoding=None):
+    def forward(self, c, s=None):
         """ Forward pass.
         
         Parameters:
         -----------
-        content_encoding : torch.Tensor, shape [batch_size, content_dim]
+        c : torch.Tensor, shape [batch_size, content_dim]
             Encoding of the content image.
-        style_encoding : torch.Tensor, shape [batch_size, style_dim]
+        s : torch.Tensor, shape [batch_size, style_dim]
             Style encoding of the style image to apply to the content image.
         
         Returns:
@@ -120,9 +127,11 @@ class Decoder(torch.nn.Module):
         stylized : torch.Tensor, shape [batch_size, , H, W]
             The stylized output image, where H and W are specified by the resolution given to the decoder initialization.
         """
-        c = content_encoding.view(-1, self.in_channels, self.in_height, self.in_width)
+        if self.content_dim is not None:
+            c = F.relu(self.fc(c), inplace=True)
+        c = c.view(c.size(0), self.in_channels, self.in_height, self.in_width)
         for idx in range(self.num_up_convolutions):
-            c = self.convs[idx](c, style_encoding=style_encoding)
+            c = self.convs[idx](c, style_encoding=s)
         return c
 
 class VGGEncoder(torch.nn.Module):

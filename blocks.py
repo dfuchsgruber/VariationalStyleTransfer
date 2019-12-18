@@ -110,13 +110,13 @@ class UpsamplingConvolution(torch.nn.Module):
         if self.instance_normalization == 'in':
             out = F.relu(self.norm1(out), inplace=False)
         elif self.instance_normalization == 'adain':
-            out = F.relu(self.norm1(out, style_encoding))
+            out = F.relu(self.norm1(out, style_encoding), inplace=False)
         out = F.interpolate(out, mode='nearest', scale_factor=2)
         out = self.conv1(self.pad(out))
         if self.instance_normalization == 'in':
-            out = F.relu(self.norm2(out), inplace=False)
+            out = F.relu(self.norm2(out), inplace=True)
         elif self.instance_normalization == 'adain':
-            out = F.relu(self.norm2(out, style_encoding), inplace=False)
+            out = F.relu(self.norm2(out, style_encoding), inplace=True)
         out = self.conv2(self.pad(out))
 
         if self.residual: # Residual
@@ -169,7 +169,7 @@ class DownsamplingConvolution(nn.Module):
         """
         out = x
         out = self.conv1(F.relu(out, inplace=False))
-        out = self.conv2(F.relu(out, inplace=False))
+        out = self.conv2(F.relu(out, inplace=True))
         out = self.pool(out)
 
         if self.residual: # Residual
