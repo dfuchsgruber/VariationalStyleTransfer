@@ -2,45 +2,68 @@ import torchvision.models
 import torch
 import function, blocks
 import torch.nn.functional as F
+import torch.nn as nn
 
+class Encoder(torch.nn.Module):
+    """ Generic encoder that encodes an image into a fixed size vector using down convolutions. """
 
-class ResNetEncoder(torch.nn.Module):
-    """ Encoder that uses a pretrained ResNet architecture. """
-
-    def __init__(self, embedding_dim, architecture=torchvision.models.resnet50, pretrained=True):
-        """ Initializes the ResNet encoder.
+    def __init__(self, output_dim, in_channels=3, normalization=True, residual=True, num_down_convolutions=6):
+        """ Initializes the encoder.
         
         Parameters:
         -----------
-        embedding_dim : int
-            Embedding dimensionality.
-        architecture : torch.nn.Module
-            A torchvision.models.resnetXX architecture to use.
-        pretrained : bool
-            If true, uses pre-trained weights of the torchvision model.
+        output_dim : int
+            The size of the embedding.
+        in_channels : int
+            The number of input channels.
+        normalization : bool
+            If True, instance normalization is applied after a down convolution.
+        residual : bool
+            If True, down convolutions use residual blocks.
         """
         super().__init__()
-        self.embedding_dim = embedding_dim
-        self.resnet = torch.nn.Sequential(*list(architecture(pretrained=pretrained).children())[:-2])
-        # Replace the fully connected layer that tries to predict 1000 class labels with a layer to the embedding dimensionality
-        if architecture is torchvision.models.resnet18 or architecture is torchvision.models.resnet34 or architecture is torchvision.models.resnet152:
-            fc_input_dim = 512
-        elif architecture is torchvision.models.resnet50 or architecture is torchvision.models.resnet101:
-            fc_input_dim = 2048
-        else:
-            raise NotImplementedError
+        self.normalization = normalization
+        self.num_down_convolutions = num_down_convolutions
+        dims = [min(512, 64*2**i) for i in range(num_down_convolutions)]
 
-        #self.resnet.fc = torch.nn.Linear(fc_input_dim, self.embedding_dim)
+        self.convs = nn.ModuleList(
+            blocks.DownsamplingConvolution(c_in, c_out, residual=residual) for c_in, c_out in zip([in_channels] + dims[:-1], dims)
+        )
+
+        if self.normalization:
+            self.norms = nn.ModuleList(
+                nn.InstanceNorm2d(c, affine=True) for c in dims
+            )
+        
+        self.pool = nn.AdaptiveMaxPool2d((1, 1))
+        self.fc = nn.Linear(dims[-1], output_dim, bias=True)
 
     def forward(self, x):
-        return self.resnet(x)
-
+        """ Forward pass.
+        
+        Parameters:
+        -----------
+        x : torch.Tensor, shape [B, channels_in, H, W]
+            Inputs to the encoder.
+        
+        Returns:
+        --------
+        z : torch.Tensor, shape [B, output_dim]
+        """
+        out = x
+        for idx in range(self.num_down_convolutions):
+            out = self.convs[idx](out)
+            if self.normalization:
+                out = self.norms[idx](out)
+        out = F.relu(self.pool(out), inplace=False)
+        out = self.fc(out.view(out.size(0), -1))
+        return out
 
 class Decoder(torch.nn.Module):
     """ General purpose decoder that uses AdaIn layers to modify the embedding multiple times and then uses
     TransposeConvs to create the output image. """
 
-    def __init__(self, content_dim, style_dim, resolution):
+    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual=True, normalization='adain', num_up_convolutions=6):
         """ Initializes the generic decoder.
         
         Parameters:
@@ -50,33 +73,36 @@ class Decoder(torch.nn.Module):
         style_dim : int or None
             The style embedding dimensionality.
         resolution : int or tuple of ints (H, W)
-            The output resolution, a multiple of 32.
+            The output resultion, a power of 2.
+        out_channels : int
+            The number of output channels.
+        residual : bool
+            If the upsampling convolutions are implemented by residual blocks.
+        normalization : 'in', 'adain' or None
+            Which kind of normalization to use. 
+        num_up_convolutions : int
+            The number of upsampling convolutions.
         """
         super().__init__()
-        # Each TransposeConv2D upsamples the image by a factor of 2, so does the Upsampling layer, i.e. the image is upscaled by a factor of 32
-        if isinstance(resolution, int):
-            resolution = (resolution, resolution)
-        self.resolution = resolution
         self.content_dim = content_dim
         self.style_dim = style_dim
-        if self.style_dim is None:
-            normalization = None
-        else:
-            normalization = 'adain'
+        self.residual = residual
+        self.normalization = normalization
+        self.num_up_convolutions = num_up_convolutions
 
-        if isinstance(self.content_dim, int):
-            self.fc = torch.nn.Sequential(
-                torch.nn.Linear(self.content_dim, 4096),
-                torch.nn.ReLU(inplace=True),
-                torch.nn.Linear(4096, (resolution[0] // 32) * (resolution[1] // 32) * 512),
-                torch.nn.ReLU(inplace=True),
-            )
-        self.up5 = blocks.UpsamplingConvolution(512, 512, instance_normalization=normalization, style_dim=style_dim)
-        self.up4 = blocks.UpsamplingConvolution(512, 256, instance_normalization=normalization, style_dim=style_dim)
-        self.up3 = blocks.UpsamplingConvolution(256, 128, instance_normalization=normalization, style_dim=style_dim)
-        self.up2 = blocks.UpsamplingConvolution(128, 64, instance_normalization=normalization, style_dim=style_dim)
-        self.up1 = blocks.UpsamplingConvolution(64, 3, instance_normalization=None)
+        dims = list(reversed([min(512, 64*2**i) for i in range(num_up_convolutions)]))
 
+        # The content input has to be reshaped to a spatial dimension, calculate the spatial dimensions
+        if isinstance(resolution, int):
+            resolution = (resolution, resolution)
+        self.in_height = resolution[0] // 2**self.num_up_convolutions
+        self.in_width = resolution[1] // 2**self.num_up_convolutions
+        self.in_channels = dims[0] 
+
+        self.convs = nn.ModuleList(
+            blocks.UpsamplingConvolution(c_in, c_out, style_dim=style_dim, instance_normalization=self.normalization, residual=self.residual)
+            for c_in, c_out in zip(dims, dims[1:] + [out_channels])
+        )
 
 
     def forward(self, content_encoding, style_encoding=None):
@@ -91,25 +117,13 @@ class Decoder(torch.nn.Module):
         
         Returns:
         --------
-        stylized : torch.Tensor, shape [batch_size, 3, H, W]
+        stylized : torch.Tensor, shape [batch_size, , H, W]
             The stylized output image, where H and W are specified by the resolution given to the decoder initialization.
         """
-
-        if isinstance(self.content_dim, int): 
-            x = self.fc(content_encoding).view(-1, 512, self.resolution[0] // 32, self.resolution[1] // 32)
-        else:
-            x = content_encoding
-
-        x = self.up5(x, style_encoding)
-        x = self.up4(x, style_encoding)
-        x = self.up3(x, style_encoding)
-        x = self.up2(x, style_encoding)
-        x = self.up1(x, style_encoding)
-
-        x = torch.sigmoid(x)
-
-        return x
-
+        c = content_encoding.view(-1, self.in_channels, self.in_height, self.in_width)
+        for idx in range(self.num_up_convolutions):
+            c = self.convs[idx](c, style_encoding=style_encoding)
+        return c
 
 class VGGEncoder(torch.nn.Module):
     """ Encoder network that contains of the first few layers of the vgg19 [1] network. 
