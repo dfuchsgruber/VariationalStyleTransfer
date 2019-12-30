@@ -43,6 +43,60 @@ class AdaInBlock(torch.nn.Module):
         transformed = function.adain_with_coefficients(x, mean, std)
         return transformed
 
+class AdaInConvolution(torch.nn.Module):
+    """ Block that does not change image size but applies convolutions and AdaIn. """
+
+    def __init__(self, channels, style_dim, kernel_size=(3, 3), residual=True):
+        """ Initialization.
+        
+        Parameters:
+        -----------
+        channels : int
+            The number of channels, same for input and output.
+        style_dim : int
+            Dimensionality of the style encoding.
+        kernel_size : int or tuple of ints
+            The kernel size of the convolution operations.
+        residual : bool
+            If True, the block is implemented as a residual block.
+        """
+        super().__init__()
+        self.residual = residual
+
+        self.pad = nn.ReflectionPad2d(1)
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=kernel_size, stride=1, padding=0)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=kernel_size, stride=1, padding=0)
+
+        self.norm1 = AdaInBlock(style_dim, channels)
+        self.norm2 = AdaInBlock(style_dim, channels)
+
+    def forward(self, x, style_encoding):
+        """ Forward pass. 
+        
+        Parameters:
+        -----------
+        x : torch.Tensor, shape [B, C, H, W]
+            The images to be processed.
+        style_encoding : torch.Tensor, shape [B, D] or None
+            The style encoding that is passed to AdaIn layers.
+        
+        Returns:
+        --------
+        x' : torch.Tensor, shape [B, C, H, W]
+            The output image, with applied normalizations.
+        """
+        out = x
+        out = self.conv1(self.pad(x))
+        out = self.norm1(out, style_encoding)
+        out = F.relu(out, inplace=True)
+        out = self.conv2(self.pad(x))
+        out = self.norm2(out, style_encoding)
+        
+        if self.residual:
+            out = out + x
+
+        return out
+
 class UpsamplingConvolution(torch.nn.Module):
     """ Block that upsamples an image, applies transposed convolutions and then normalizes the output. """
 

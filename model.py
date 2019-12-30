@@ -58,16 +58,18 @@ class Encoder(torch.nn.Module):
             out = self.convs[idx](out)
             if self.normalization:
                 out = self.norms[idx](out)
+
         if self.output_dim is not None:
             out = F.relu(self.pool(out), inplace=True)
             out = self.fc(out.view(out.size(0), -1))
+        
         return out
 
 class Decoder(torch.nn.Module):
     """ General purpose decoder that uses AdaIn layers to modify the embedding multiple times and then uses
     TransposeConvs to create the output image. """
 
-    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual=True, normalization='adain', num_up_convolutions=6):
+    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual=True, normalization='adain', num_adain_convolutions=5, num_up_convolutions=6):
         """ Initializes the generic decoder.
         
         Parameters:
@@ -83,7 +85,9 @@ class Decoder(torch.nn.Module):
         residual : bool
             If the upsampling convolutions are implemented by residual blocks.
         normalization : 'in', 'adain' or None
-            Which kind of normalization to use. 
+            Which kind of normalization to use. Can be a single value (applied to all layers) or a list with length num_up_convolutions.
+        num_adain_convolutions: int
+            The number of AdaIn Convolutional blocks to be applied before upsampling.
         num_up_convolutions : int
             The number of upsampling convolutions.
         """
@@ -92,6 +96,7 @@ class Decoder(torch.nn.Module):
         self.style_dim = style_dim
         self.residual = residual
         self.normalization = normalization
+        self.num_adain_convolutions = num_adain_convolutions
         self.num_up_convolutions = num_up_convolutions
 
         dims = list(reversed([min(512, 64*2**i) for i in range(num_up_convolutions)]))
@@ -106,9 +111,14 @@ class Decoder(torch.nn.Module):
         if self.content_dim is not None:
             self.fc = nn.Linear(self.content_dim, self.in_channels * self.in_width * self.in_height) 
 
-        self.convs = nn.ModuleList(
-            blocks.UpsamplingConvolution(c_in, c_out, style_dim=style_dim, instance_normalization=self.normalization, residual=self.residual)
-            for c_in, c_out in zip(dims, dims[1:] + [out_channels])
+        self.adain_convs = nn.ModuleList(blocks.AdaInConvolution(self.in_channels, style_dim, residual=self.residual) for _ in range(num_adain_convolutions))
+
+        if isinstance(self.normalization, str):
+            self.normalization = [self.normalization for _ in range(self.num_up_convolutions)]
+
+        self.up_convs = nn.ModuleList(
+            blocks.UpsamplingConvolution(c_in, c_out, style_dim=style_dim, instance_normalization=self.normalization[idx], residual=self.residual)
+            for idx, (c_in, c_out) in enumerate(zip(dims, dims[1:] + [out_channels]))
         )
 
 
@@ -130,8 +140,12 @@ class Decoder(torch.nn.Module):
         if self.content_dim is not None:
             c = F.relu(self.fc(c), inplace=True)
         c = c.view(c.size(0), self.in_channels, self.in_height, self.in_width)
+        
+        for idx in range(self.num_adain_convolutions):
+            c = self.adain_convs[idx](c, style_encoding=s)
+        
         for idx in range(self.num_up_convolutions):
-            c = self.convs[idx](c, style_encoding=s)
+            c = self.up_convs[idx](c, style_encoding=s)
         return c
 
 class VGGEncoder(torch.nn.Module):

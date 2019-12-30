@@ -85,6 +85,22 @@ def load_debug_dataset(directory, resolution=64, number_instances=100000000):
     """ Loads some debug style images. """
     return ImageDataset(list_images(directory)[:number_instances], resolution=resolution, random_cropping=False, random_flipping=False)
 
+def resize_images_offline(directory, output_dir, resolution=256):
+    """ Resizes all images in directory to a new resolution and saves them in output_dir """
+    images = list(map(str, list(Path(directory).rglob("*.jpg"))))
+    resizeOp = transforms.Resize((resolution, resolution))
+    
+    for idx, path in enumerate(images):
+        image = Image.open(path).convert('RGB') # Use a RGB instead of an RGBA image
+        image = resizeOp(image)
+        _, filename = os.path.split(path)
+        savepath = os.path.join(output_dir, filename)
+        image.save(savepath)
+        
+        if idx % 1000 == 0:
+            print(f"Progress: ({idx}/{len(images)})")
+
+
 class DatasetPairIterator:
     """ Iterator that endlessly yields pairs of images. """
 

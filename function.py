@@ -37,6 +37,8 @@ def instance_mean_and_std(x):
         The instance standard deviations of x.
     """
     B, C, H, W = x.size()
+    if H == 1 and W == 1:
+        raise ValueError("height and width in decoder are 1, this means that the variance in the AdaIn layer becomes NaN. Use fewer downconvolutions or a higher resolution!")
     x_var, x_mean = torch.var_mean(x.view(B, C, -1), -1, keepdim=True)
     return x_mean.unsqueeze(-1), x_var.sqrt().unsqueeze(-1)
 
