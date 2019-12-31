@@ -139,7 +139,7 @@ class Decoder(torch.nn.Module):
         """
         if self.content_dim is not None:
             c = F.relu(self.fc(c), inplace=True)
-        c = c.view(c.size(0), self.in_channels, self.in_height, self.in_width)
+            c = c.view(c.size(0), self.in_channels, self.in_height, self.in_width)
         
         for idx in range(self.num_adain_convolutions):
             c = self.adain_convs[idx](c, style_encoding=s)
