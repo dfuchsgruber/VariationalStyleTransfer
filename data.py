@@ -39,7 +39,7 @@ def vgg_normalization_undo(image):
 
 class ImageDataset(torch.utils.data.Dataset):
 
-    def __init__(self, paths, resolution=64, random_cropping=True, random_flipping=True):
+    def __init__(self, paths, resolution=64, random_cropping=True, random_flipping=True, vgg_normalization=False):
         """ Initializes the dataset.
         
         Parameters:
@@ -52,6 +52,8 @@ class ImageDataset(torch.utils.data.Dataset):
             If True, a random region will be cropped randomly, else it will be cropped from the center.
         random_flipping : bool
             If True, the image may be flipped horizontally.
+        vgg_normalization : bool
+            If True, the images are normalized according to the pre-trained vgg networks.
         """
         self.paths = paths
         transformations = [transforms.Resize(resolution)]
@@ -61,7 +63,9 @@ class ImageDataset(torch.utils.data.Dataset):
             transformations.append(transforms.CenterCrop(resolution))
         if random_flipping:
             transformations.append(transforms.RandomHorizontalFlip())
-        transformations += [transforms.ToTensor(), vgg_normalization]
+        transformations.append(transforms.ToTensor())
+        if vgg_normalization:
+            transformations.append(vgg_normalization)
         self.transformations=transforms.Compose(transformations)
 
     def __getitem__(self, idx):

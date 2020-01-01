@@ -86,6 +86,7 @@ class AdaInConvolution(torch.nn.Module):
             The output image, with applied normalizations.
         """
         out = x
+        out = F.relu(out, inplace=True)
         out = self.conv1(self.pad(x))
         out = self.norm1(out, style_encoding)
         out = F.relu(out, inplace=True)

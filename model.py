@@ -69,7 +69,8 @@ class Decoder(torch.nn.Module):
     """ General purpose decoder that uses AdaIn layers to modify the embedding multiple times and then uses
     TransposeConvs to create the output image. """
 
-    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual=True, normalization='adain', num_adain_convolutions=5, num_up_convolutions=6):
+    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual=True, normalization='adain', num_adain_convolutions=5, 
+        num_up_convolutions=6, output_activation='sigmoid'):
         """ Initializes the generic decoder.
         
         Parameters:
@@ -90,6 +91,8 @@ class Decoder(torch.nn.Module):
             The number of AdaIn Convolutional blocks to be applied before upsampling.
         num_up_convolutions : int
             The number of upsampling convolutions.
+        output_activation : 'sigmoid' or None
+            Element-wise activation for the output of the decoder.
         """
         super().__init__()
         self.content_dim = content_dim
@@ -98,6 +101,7 @@ class Decoder(torch.nn.Module):
         self.normalization = normalization
         self.num_adain_convolutions = num_adain_convolutions
         self.num_up_convolutions = num_up_convolutions
+        self.output_activation = output_activation
 
         dims = list(reversed([min(512, 64*2**i) for i in range(num_up_convolutions)]))
 
@@ -127,7 +131,7 @@ class Decoder(torch.nn.Module):
         
         Parameters:
         -----------
-        c : torch.Tensor, shape [batch_size, content_dim]
+        c : torch.Tensor, shape [batch_size, ...]
             Encoding of the content image.
         s : torch.Tensor, shape [batch_size, style_dim]
             Style encoding of the style image to apply to the content image.
@@ -146,6 +150,11 @@ class Decoder(torch.nn.Module):
         
         for idx in range(self.num_up_convolutions):
             c = self.up_convs[idx](c, style_encoding=s)
+
+        if self.output_activation is 'sigmoid':
+            c = F.sigmoid(c)
+        elif self.output_activation is not None:
+            raise RuntimeError(f'Unknown output activation {self.output_activation}')
         return c
 
 class VGGEncoder(torch.nn.Module):
