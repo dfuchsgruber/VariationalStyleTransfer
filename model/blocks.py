@@ -184,7 +184,7 @@ class UpsamplingConvolution(torch.nn.Module):
 class DownsamplingConvolution(nn.Module):
     """ Residual block that applies downsampling and convolutions. """
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, residual=True):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, residual=True, instance_normalization=False):
         """ Initializes the downsampling convolution.
         
         Parameters:
@@ -199,15 +199,21 @@ class DownsamplingConvolution(nn.Module):
             The stride of convolution operation.
         residual : bool
             If True, the block is implemented as a residual block.
+        instance_normalization : bool
+            If True, the instance normalization is applied downsampling.
         """
         super().__init__()
         self.residual = residual
+        self.instance_normalization = instance_normalization
 
         self.pool = nn.AvgPool2d(2, stride=2)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=kernel_size // 2)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, stride=stride, padding=kernel_size // 2)
         if self.residual:
             self.conv_residual = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=kernel_size // 2)
+        if self.instance_normalization:
+            self.norm1 = nn.InstanceNorm2d(out_channels, affine=True)
+            self.norm2 = nn.InstanceNorm2d(out_channels, affine=True)
 
     def forward(self, x):
         """ Forward pass.
@@ -223,8 +229,14 @@ class DownsamplingConvolution(nn.Module):
             Output image of size (W / 2, H / 2) with C' output channels.
         """
         out = x
-        out = self.conv1(F.relu(out, inplace=False))
-        out = self.conv2(F.relu(out, inplace=True))
+        out = self.conv1(out)
+        if self.instance_normalization:
+            out = self.norm1(out)
+        out = F.relu(out, inplace=True)
+        out = self.conv2(out)
+        if self.instance_normalization:
+            out = self.norm2(out)
+        out = F.relu(out, inplace=True)
         out = self.pool(out)
 
         if self.residual: # Residual
