@@ -143,3 +143,48 @@ class DatasetPairIterator:
         """ Resets iterator states for both dataset. """
         self.dataset_content_iterator = iter(self.dataset_content)
         self.dataset_style_iterator = iter(self.dataset_style)
+
+
+class DatasetTripletIterator:
+    """ Iterator that endlessly yields triplets of content_image, content_image and style_image. """
+
+    def __init__(self, dataset_content, dataset_style):
+        """ Initializes the pairwise dataset iterator.
+        
+        Parameters:
+        -----------
+        dataset_content : iterable
+            An iterable for content images.
+        dataset_style : iterable
+            An iterable for style images.
+        """
+        self.dataset_content = dataset_content
+        self.dataset_style = dataset_style
+        self.dataset_content_iterator = iter(self.dataset_content)
+        self.dataset_style_iterator = iter(self.dataset_style)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            content1 = next(self.dataset_content_iterator)
+        except StopIteration:
+            self.dataset_content_iterator = iter(self.dataset_content)
+            content1 = next(self.dataset_content_iterator)
+        try:
+            content2 = next(self.dataset_content_iterator)
+        except StopIteration:
+            self.dataset_content_iterator = iter(self.dataset_content)
+            content2 = next(self.dataset_content_iterator)
+        try:
+            style = next(self.dataset_style_iterator)
+        except:
+            self.dataset_style_iterator = iter(self.dataset_style)
+            style = next(self.dataset_style_iterator)
+        return content1, content2, style
+
+    def reset(self):
+        """ Resets iterator states for both dataset. """
+        self.dataset_content_iterator = iter(self.dataset_content)
+        self.dataset_style_iterator = iter(self.dataset_style)

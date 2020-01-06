@@ -2,6 +2,7 @@ import torch
 import torchvision
 import function
 from data import vgg_normalization_mean, vgg_normalization_std
+import torch.nn.functional as F
 
 # Layer idxs of the vgg19 net before pooling operations
 vgg19_activation_layer_names = {
@@ -95,9 +96,9 @@ def perceptual_loss(feature_activations_x, feature_activations_y, weights : dict
         Weighted sum of L2 feature map distances.
     """
     if loss in ('l1', 'L1'):
-        loss_fn = torch.nn.functional.l1_loss
+        loss_fn = F.l1_loss
     elif loss in ('l2', 'L2', 'mse'):
-        loss_fn = torch.nn.functional.mse_loss
+        loss_fn = F.mse_loss
     else:
         raise RuntimeError(f'Unknown loss reduction {loss}')
 
@@ -127,9 +128,9 @@ def style_loss(feature_activations_x, feature_activations_y, weights : dict, los
         Weighted sum of L2 gram matrix distances.
     """
     if loss in ('l1', 'L1'):
-        loss_fn = torch.nn.functional.l1_loss
+        loss_fn = F.l1_loss
     elif loss in ('l2', 'L2', 'mse'):
-        loss_fn = torch.nn.functional.mse_loss
+        loss_fn = F.mse_loss
     else:
         raise RuntimeError(f'Unknown loss reduction {loss}')
 
@@ -140,14 +141,42 @@ def style_loss(feature_activations_x, feature_activations_y, weights : dict, los
         loss += weight * loss_fn(Gx, Gy)
     return loss
     
+def disentanglement_loss(s, s_1, s_2):
+    """ Loss that enforces style and content disentanglement: It pulls two stylizations of different
+    content images with the same style closer together in style space than a stylization and the original
+    style encoding.
+    
+    Parameters:
+    -----------
+    s : torch.Tensor, shape [batch_size, style_dim]
+        Encoding of the style used for stylization.
+    s_1 : torch.Tensor, shape [batch_size, style_dim]
+        The first stylization using s in style space.
+    s_2 : torch.Tensor, shape [batch_size, style_dim]
+        The second stylization using s in style space.
+    
+    Return:
+    -------
+    loss : torch.Variable
+        The disentanglement loss.
+    """
+    return torch.clamp(F.mse_loss(s_1, s_2) - F.mse_loss(s, s_1), min=0).mean()
+    
+def kld_loss(mean, logvar):
+    """ Loss that enforces style encodings to be distributed like a standard normal distribution.
+    
+    Parameters:
+    -----------
+    mean : torch.Tensor, shape [batch_size, style_dim]
+        The means of the style encodings.
+    logvar : torch.Tensor, shape [batch_size, style_dim]
+        The log-variances of the style encodings.
+    
+    Returns:
+    --------
+    kld : torch.Variable
+        The KL divergence between the distribution of style encodings in this batch and the standard normal distribution.
+    """
+    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
 
-
-"""
-def adain_style_loss(feature_activations_x, feature_activations_y):
-    losses = {}
-    for key in feature_activations_x:
-        mean_x, std_x = model.instance_mean_and_std(feature_activations_x[key])
-        mean_y, std_y = model.instance_mean_and_std(feature_activations_y[key])
-        losses[key] = mse_loss(mean_x, mean_y) + mse_loss(std_x, std_y)
-    return losses
-"""
+    
