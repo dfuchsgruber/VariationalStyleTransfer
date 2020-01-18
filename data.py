@@ -188,3 +188,53 @@ class DatasetTripletIterator:
         """ Resets iterator states for both dataset. """
         self.dataset_content_iterator = iter(self.dataset_content)
         self.dataset_style_iterator = iter(self.dataset_style)
+
+
+class DatasetZippedTripletIterator:
+    """ Iterator that yields a "zipped" version content and style images:
+    
+    For N content and M style images, the iterator returns a batch assembled
+    of all N*M different combinations of content images.
+    """
+
+    def __init__(self, dataset_content, dataset_style):
+        """ Initializes the pairwise dataset iterator.
+        
+        Parameters:
+        -----------
+        dataset_content : iterable
+            An iterable for content images.
+        dataset_style : iterable
+            An iterable for style images.
+        """
+        self.dataset_content = dataset_content
+        self.dataset_style = dataset_style
+        self.dataset_content_iterator = iter(self.dataset_content)
+        self.dataset_style_iterator = iter(self.dataset_style)
+
+    
+    def __next__(self):
+        try:
+            content = next(self.dataset_content_iterator)
+        except StopIteration:
+            self.dataset_content_iterator = iter(self.dataset_content)
+            content = next(self.dataset_content_iterator)
+        try:
+            style = next(self.dataset_style_iterator)
+        except:
+            self.dataset_style_iterator = iter(self.dataset_style)
+            style = next(self.dataset_style_iterator)
+        
+        content, content_paths = content
+        style, style_paths = style
+
+        N = content.size(0)
+        M = style.size(0)
+        content_labels = torch.arange(N).unsqueeze(1).repeat((1, M)).view(-1)
+        style_labels = torch.arange(M).repeat(N)
+        yield (content[content_labels], content_paths[content_labels]), (style[style_labels], style_paths[style_labels]), content_labels, style_labels
+
+
+
+
+
