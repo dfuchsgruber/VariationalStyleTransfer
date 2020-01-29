@@ -66,13 +66,13 @@ class Encoder(torch.nn.Module):
         
         return out
 
-class Decoder(torch.nn.Module):
-    """ General purpose decoder that uses AdaIn layers to modify the embedding multiple times and then uses
+class Autoencoder(torch.nn.Module):
+    """ Autoencoder that uses AdaIn layers to modify the embedding multiple times and then uses
     TransposeConvs to create the output image. """
 
-    def __init__(self, content_dim, style_dim, resolution, out_channels=3, residual_adain=True, residual_upsampling=True, 
-        normalization='adain', num_adain_convolutions=5, 
-        num_up_convolutions=6, output_activation='sigmoid'):
+    def __init__(self, content_dim, style_dim, resolution, channels=3, residual_downsampling=True, residual_adain=True, residual_upsampling=True, 
+        down_normalization='in', up_normalization='adain', num_adain_convolutions=5, 
+        num_downup_convolutions=6, output_activation='sigmoid'):
         """ Initializes the generic decoder.
         
         Parameters:
@@ -83,30 +83,38 @@ class Decoder(torch.nn.Module):
             The style embedding dimensionality.
         resolution : int or tuple of ints (H, W)
             The output resultion, a power of 2.
-        out_channels : int
-            The number of output channels.
+        channels : int
+            The number of input and output channels.
+        residual_downsampling : bool
+            if the downsampling
         residual_adain : bool
-            If the upsampling convolutions are implemented by residual blocks in adain convolutions
+            If the adain convolutions are implemented by residual blocks in adain convolutions
         residual_upsampling : bool
             If the upsampling convolutions are implemented by residual blocks in upsampling convolutions.
-        normalization : 'in', 'adain' or None
+        down_normalization : 'in' or None
+            Which kind of normalization to use in the encoder part
+        up_normalization : 'in', 'adain' or None
             Which kind of normalization to use. Can be a single value (applied to all layers) or a list with length num_up_convolutions.
         num_adain_convolutions: int
             The number of AdaIn Convolutional blocks to be applied before upsampling.
-        num_up_convolutions : int
-            The number of upsampling convolutions.
+        num_downup_convolutions : int
+            The number of downsampling and upsampling convolutions.
         output_activation : 'sigmoid' or None
             Element-wise activation for the output of the decoder.
         """
         super().__init__()
         self.content_dim = content_dim
         self.style_dim = style_dim
+        self.residual_downsampling = residual_downsampling
         self.residual_adain = residual_adain
         self.residual_upsampling = residual_upsampling
-        self.normalization = normalization
+        self.down_normalization = down_normalization
+        self.up_normalization = up_normalization
         self.num_adain_convolutions = num_adain_convolutions
-        self.num_up_convolutions = num_up_convolutions
+        self.num_downup_convolutions = num_downup_convolutions
         self.output_activation = output_activation
+
+        self.encoder = Encoder(self.content_dim, channels, self.residual_downsampling, self.num_downup_convolutions)
 
         dims = list(reversed([min(512, 64*2**i) for i in range(num_up_convolutions)]))
 
@@ -122,22 +130,22 @@ class Decoder(torch.nn.Module):
 
         self.adain_convs = nn.ModuleList(blocks.AdaInConvolution(self.in_channels, style_dim, residual=self.residual_adain) for _ in range(num_adain_convolutions))
 
-        if isinstance(self.normalization, str):
+        if type(self.normalization) is not list:
             self.normalization = [self.normalization for _ in range(self.num_up_convolutions)]
 
         self.up_convs = nn.ModuleList(
             blocks.UpsamplingConvolution(c_in, c_out, style_dim=style_dim, instance_normalization=self.normalization[idx], residual=self.residual_upsampling)
-            for idx, (c_in, c_out) in enumerate(zip(dims, dims[1:] + [out_channels]))
+            for idx, (c_in, c_out) in enumerate(zip(dims, dims[1:] + [channels]))
         )
 
 
-    def forward(self, c, s=None):
+    def forward(self, x, s=None):
         """ Forward pass.
         
         Parameters:
         -----------
-        c : torch.Tensor, shape [batch_size, ...]
-            Encoding of the content image.
+        x : torch.Tensor, shape [B, channels_in, H, W]
+            Inputs to the encoder.
         s : torch.Tensor, shape [batch_size, style_dim]
             Style encoding of the style image to apply to the content image.
         
@@ -146,6 +154,9 @@ class Decoder(torch.nn.Module):
         stylized : torch.Tensor, shape [batch_size, , H, W]
             The stylized output image, where H and W are specified by the resolution given to the decoder initialization.
         """
+
+        c = self.encoder(x)
+
         if self.content_dim is not None:
             c = F.relu(self.fc(c), inplace=True)
             c = c.view(c.size(0), self.in_channels, self.in_height, self.in_width)

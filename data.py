@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 import numpy as np
 from pathlib import Path
 import random
+import pickle
 
 import os
 
@@ -13,6 +14,18 @@ from PIL import Image
 def list_images(directory, extensions=('.png', '.jpeg', '.jpg')):
     """ Lists all images in a directory. """
     return [os.path.join(dirpath, filename) for dirpath, dirname, filenames in os.walk(directory) for filename in filenames if any(filename.endswith(extension) for extension in extensions)]
+
+def filter_images(paths, bad_dirs, filter_file, filter_prefix):
+    with open(filter_file, "rb") as file:
+        good_paths = pickle.load(file)
+        good_paths_set = set([os.path.normpath(os.path.join(filter_prefix,path)) for path in good_paths])
+
+        filtered_paths = [path for path in paths if not any(bad_dir in path for bad_dir in bad_dirs)]
+        filtered_paths_set = set([os.path.normpath(path) for path in filtered_paths])
+
+        filtered_paths = filtered_paths_set.intersection(good_paths_set)
+
+    return list(filtered_paths)
 
 # VGG19 was trained on images that were normalized with these values
 vgg_normalization_mean = np.array([0.485, 0.456, 0.406])
@@ -77,17 +90,22 @@ class ImageDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.paths)
 
+def load_dataset_from_list(files, resolution=64, seed=1337):
+    """ Loads some content images. """
+    random.seed(seed)
+    random.shuffle(files)
+    return ImageDataset(files, resolution=resolution, random_cropping=False, random_flipping=False)
 
-def load_dataset(directory, resolution=64, seed=1337):
+def load_dataset(directory, resolution=64, seed=1337, random_transformations=False):
     """ Loads some debug content images. """
     random.seed(seed)
     jpgs = list(map(str, list(Path(directory).rglob("*.jpg"))))
     random.shuffle(jpgs)
-    return ImageDataset(jpgs, resolution=resolution, random_cropping=True, random_flipping=True)
+    return ImageDataset(jpgs, resolution=resolution, random_cropping=random_transformations, random_flipping=random_transformations)
 
-def load_debug_dataset(directory, resolution=64, number_instances=100000000):
+def load_debug_dataset(directory, resolution=64, number_instances=100000000, random_transformations=False):
     """ Loads some debug style images. """
-    return ImageDataset(list_images(directory)[:number_instances], resolution=resolution, random_cropping=False, random_flipping=False)
+    return ImageDataset(list_images(directory)[:number_instances], resolution=resolution, random_cropping=random_transformations, random_flipping=random_transformations)
 
 def resize_images_offline(directory, output_dir, resolution=256):
     """ Resizes all images in directory to a new resolution and saves them in output_dir """
