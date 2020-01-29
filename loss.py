@@ -179,4 +179,73 @@ def kld_loss(mean, logvar):
     """
     return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
 
+def pairwise_distances(E):
+    """ Calculates pairwise distances between embeddings of a batch. This uses the identity
+    d(i, j) = |i-j|^2 = i^2 + j^2 - 2ij
     
+    Parameters:
+    -----------
+    E : torch.Tensor, shape [B, embedding_dim]
+        The embeddings.
+    
+    Returns.
+    --------
+    D : torch.Tensor, shape [D, D]
+        Distance matrix.
+    """
+    norm = (E**2).sum(1).view(-1, 1) # Norms of all entries in X
+    return norm + norm.view(1, -1) - 2 * torch.mm(E, E.t())
+
+def triplet_masks(style_labels):
+    """ Creates a masks for positive and negative examples given an anchor.
+    
+    Parameters:
+    -----------
+    style_label : torch.LongTensor, shape [B]
+        The style labels.
+        
+    Returns:
+    --------
+    mask_positive : torch.BoolTensor, shape [B, B]
+        A mask matrix, where mask[i, j] tells if j is a postivie example for anchor i.
+    mask_negative : torch.BoolTensor, shape [B, B]
+        A mask matrix, where mask[i, j] tells if j is a negative examle for anchor i.
+    """
+    mask_positive = style_labels.unsqueeze(0) == style_labels.unsqueeze(1)
+    # Remove the diganonal from the positive mask
+    return mask_positive & ~(torch.eye(style_labels.size(0)).bool()), ~mask_positive
+
+def batch_hard_triplet_loss(E, style_labels, margin):
+    """ Computes the "batch-hard" triplet loss following [1], where for each anchor the hardest positive
+    and negative examples are selected (among the batch).
+    
+    Parameters:
+    -----------
+    E : torch.Tensor, shape [B, embedding_dim]
+        The embedding matrix.
+    style_labels : torch.LongTensor, shape [B]
+        Style labels.
+    margin : float
+        The margin for the triplet loss.
+        
+    Returns:
+    --------
+    triplet_loss : torch.Float
+        The triplet loss for this batch.
+        
+    References:
+    -----------
+    [1] : https://arxiv.org/abs/1703.07737
+    """
+    D = pairwise_distances(E)
+    print(D)
+    mask_positive, mask_negative = triplet_masks(style_labels)
+    
+    # For each anchor in the batch select the hardest positive example, i.e. with the largest distance
+    positive_loss, _ = (D * mask_positive).max(dim=1)
+    
+    # For each anchor in the batch, select the hardest negative example, i.e. with the smallest distance.
+    # Add a large number (the maximum distance for each anchor) to all invalid negative examples and select the min
+    D_negative = D + D.max(1)[0].unsqueeze(1) * (~mask_negative)
+    negative_loss, _ = D_negative.min(dim=1)
+    return torch.clamp(positive_loss - negative_loss + margin, min=0.0).mean()
