@@ -107,7 +107,7 @@ def load_debug_dataset(directory, resolution=64, number_instances=100000000, ran
     """ Loads some debug style images. """
     return ImageDataset(list_images(directory)[:number_instances], resolution=resolution, random_cropping=random_transformations, random_flipping=random_transformations)
 
-def resize_images_offline(directory, output_dir, resolution=256):
+def resize_images_offline(directory, output_dir, resolution=96):
     """ Resizes all images in directory to a new resolution and saves them in output_dir """
     images = list(map(str, list(Path(directory).rglob("*.jpg"))))
     resizeOp = transforms.Resize((resolution, resolution))
