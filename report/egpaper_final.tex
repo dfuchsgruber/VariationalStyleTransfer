@@ -49,31 +49,27 @@ Dominik Fuchsgruber
 %%%%%%%%% BODY TEXT
 \section{Introduction}
 
-The task of artistic style transfer aims to extract the style of an (artistic) image and transfer it to the content of another picture and was first introduced by the seminal work of Gatys et al. in \cite{gatys}. Their approach optimizes a random noise image to fit a particular style and content, which is very demanding computationally-wise. Ever since, many methods were developed that generalize the method proposed in \cite{gatys} to arbitrary styles while also significantly alleviating the computational burden by introducing fully feed-forward neural networks. As has been shown in \cite{adain}, using an encoder-decoder architecture, where the decoder layers are conditioned on a style image using using \textit{Adaptive Instance Normalization} (AdaIn), can achieve visually pleasant results. Instead of using the same encoder module for style and content image, we follow Kotovenko et al. \cite{disentanglement} and make use of distinct encoders for content and style images.
+The task of artistic style transfer aims to extract the style of an (artistic) image and transfer it to the content of another picture. As has been shown in \cite{adain}, using an encoder-decoder architecture, where the decoder layers are conditioned on a style image using using \textit{Adaptive Instance Normalization} (AdaIn), can achieve visually pleasant results. Instead of using the same encoder module for style and content image, we follow Kotovenko et al. \cite{disentanglement} and make use of distinct encoders for content and style images.
 
-Furthermore, we extend their approach by using a variational autoencoder architecture \cite{vae} to encode the style from an image. This enforces smoothness to the latent style space, which allows for better interpolation between different style embeddings. Furthermore, we are able to draw samples from the latent style space, opening up a generative perspective to our approach.
+Furthermore, we extend their approach by using a variational autoencoder architecture \cite{vae} to encode the style from an image. This enforces smoothness to the latent style space, which allows for better interpolation between different style embeddings. Additionally, we are able to draw samples from the latent style space, opening up a generative perspective to our approach.
 
 %-------------------------------------------------------------------------
 \section{Related Work}
 
-Artistic style transfer was introduced by Gatys et al. in \cite{gatys}, where the authors noticed, that the style of an image is captured by the gram matrices of different feature maps using the space of a VGG network.   Optimizing a random noise image to minimize the perceptual loss with respect to the content image, while at the same time minimizing the discrepancy of the gram matrices with regards to a style image, leads to a visually appealing stylization. However, their approach suffered from heavy computational requirements, which lead to the development of fully feed-forward architectures for style transfer. \cite{adain} introduces an autoencoder-based approach that is applicable to transfer arbitrary styles the model was not explicitly trained on. They use \textit{Adaptive Instance Normalization}, which manipulates the instance-wise statistics of a content image before each decoder layer, which surprisingly proofed to be sufficient to achieve high quality stylizations. Their method was expanded upon by Kotovenko et al. \cite{disentanglement}, which proposed to incorporate two distinct encoders for content and style images and furthermore introduced a disentanglement loss term that counteracts entanglement of the two latent spaces.
+Artistic style transfer was introduced by Gatys et al. in \cite{gatys}, where the authors noticed, that the style of an image is captured by the gram matrices of different feature maps using the space of a VGG network.   Optimizing a random noise image to minimize both content and style loss leads to a visually convincing stylization. The heavy computational burdens of this approach led to the development of fully feed-forward architectures for style transfer. An autoencoder-based approach that is applicable to transfer arbitrary styles unseen by the model is introduced in \cite{adain}. They use \textit{Adaptive Instance Normalization}, which manipulates the instance-wise statistics of a content image before each decoder layer. This method was expanded upon by Kotovenko et al. \cite{disentanglement}, who proposed to incorporate two distinct encoders for content and style images.
 
-\textit{Adaptive Instance Normalization} is also used to approach different problems, one of which being synthesizing photo-realistic video sequences of speech expressions for a particular individual \cite{talkingheads}. They use AdaIn to condition a decoder module on an embedding of the facial characteristics of a person. In our project, we heavily rely on the architecture of their approach, namely residual blocks both in the encoders and the decoder as well as bottleneck layers between the two. We extend this model by introducing U-Net connections between the content encoder and the decoder module, which was first proposed in \cite{unet}.
+\textit{Adaptive Instance Normalization} is also used to approach different problems, one of which being synthesizing photo-realistic video sequences of speech expressions for a particular individual \cite{talkingheads}. They use AdaIn to condition a decoder module on an embedding of the facial characteristics of a person. In our project, we heavily rely on the architecture of their approach, namely residual blocks both in the encoders and the decoder as well as bottleneck layers between the two. We extend this model by introducing U-Net \cite{unet} connections between the content encoder and the decoder.
 
-The concept of encoding images into a distribution space rather than just embedding them as simple points was first used in \cite{vae}. By sampling from those distributions during training, variations in the latent space can be captured, which leads to a smoother manifold. Furhtermore, the distributions provided by the encoder are regularized to resemble a standard normal, which allows for sampling from the latent space as well.
+The concept of encoding images as distributions rather than just simple points was first used in \cite{vae}. By sampling from those distributions during training, variations in the latent space can be captured, which leads to a smoother manifold. Furthermore, the distributions provided by the encoder are regularized to resemble a standard normal, which allows for sampling from the latent space as well.
 
 
 \section{Our Approach}
 
-We denote with $c \in \mathbb{R}^{3 \times H \times W}$ a content image and analogously with $y \in \mathbb{R}^{3 \times H \times W}$ a style image.
-
-\subsection{Architecture}
-
 Our model consists of three parts: Two distinct encoders for content and style images as well as a decoder that outputs stylizations.
 \begin{itemize}
-	\item The \textit{content encoder} $E_c$ takes a content image $c$ and applies several convolutions and pooling operations to a content image. It is composed of several residual blocks, and the output still retains a spatial shape, i.e. $E_c(c) \in \mathbb{R}^{D_c \times H^\prime \times W^\prime}$.
-	\item The \textit{style encoder} $E_s(s)$ is designed analogously to the content encoder, with the only difference being the use of adaptive pooling after the last convolution. That is, the style encoder yields a fixed-size embedding distribution by outputting the mean and variance of a normal distribution: $E_s(s) \in \mathbb{R}^{2D_s}$.
-	\item The \textit{decoder} mirrors the design of the two encoders. It is preceded by several bottleneck layers, which do not change the resolution of the input image. Both the bottleneck layers as well as the upsamling convolutions are conditioned on the style embedding using \textit{Adaptive Instance Normalization}. Additionally, we use U-Net connections that connect the output of content encoder layers to the respective components of the decoder. We denote its output with $y = D(E_c(c), E_s(s))$.
+	\item The \textit{content encoder} $E_c$ takes a content image $c$ and applies a series of convolutions and poolings to it. The embeddings still retain a spatial extent, in contrast to just being flat vectors.
+	\item The \textit{style encoder} $E_s(s)$ is designed analogously to the content encoder, with the only difference being the use of adaptive pooling after the last convolution. Therefore, the style encoder yields a fixed-size embedding distribution by outputting the mean and variance of a normal distribution.
+	\item The \textit{decoder} mirrors the design of the two encoders. It is preceded by several bottleneck layers, which do not change the resolution of the input image. Both the bottleneck layers as well as the upsamling convolutions are conditioned on the style embedding using \textit{Adaptive Instance Normalization}. Additionally, we use U-Net connections that connect the output of content encoder layers to the respective components of the decoder.
 \end{itemize}
 	
 \begin{figure}
@@ -83,36 +79,83 @@ Our model consists of three parts: Two distinct encoders for content and style i
 \label{fig:model}
 \end{figure}
 	
-\subsection{Adaptive Instance Normalization}
-
-Before each convolution in the decoder, the instance wise mean $\mu$ and variance $\sigma^2$ of an image is shifted according to a learnable, linear transformation the style encoding:
-\begin{equation}
-\{\mu,\sigma^2\} = \mathbf{W}E_s(s) + b
-\end{equation}
 	
 \subsection{Losses}
 
-Our network is trained with respect to three different objectives, two of which are computed in the features space of a pre-trained VGG19 network. Let $VGG^{\{i\}}$ denote the feature maps of the $i$-th layer and $G(x)$ the gram matrix of an activation $x$.
+Our network is trained with respect to three different objectives, two of which are computed in the features space of a pre-trained VGG19 network. Let $VGG^{\{i\}}$ denote the feature maps of the $i$-th layer and $G(x)$ the gram matrix.
 \begin{itemize}
 	\item The content loss $\mathcal{L}_{content}$ penalizes deviations of the stylizations regarding the content image and is implemented as a perceptual loss. That is, we consider the feature maps of the $relu_{4,2}$ layer of the VGG19 network.
 	\item The style loss $\mathcal{L}_{style}$ penalizes deviations from the style image by comparing the gram matrices of different VGG19 activation maps. We include all layers up to $relu_{4,2}$ into the style loss term.
 	\item The variational loss $\mathcal{L}_{KL}$ regularizes the latent space to resemble a standard normal distribution. It uses the Kullback-Leibler divergence to compare the two distributions.
 \end{itemize}
-\begin{multline}
+\begin{multline*}
 \mathcal{L}_{content} = \sum_{i} \Vert VGG^{\{i\}}(c) - VGG^{\{i\}}(y)\Vert_2^2 \\
 \mathcal{L}_{style} = \sum_{i} \Vert G(VGG^{\{i\}}(c)) - G(VGG^{\{i\}}(y))\Vert_2^2 \\
 \mathcal{L}_{KL} = KL(\mathcal{N}(E_s(s)_{:D_s}, E_s(s)_{D_s:}) \Vert \mathcal{N}(0, I))
-\end{multline}
+\end{multline*}
 
-We assign different weights $\lambda$ to each component of the content and style loss terms, as well as the variational loss.
+The content is denoted with $c$, the style image with $s$ and the stylization with $y$. We assign different weights $\lambda$ to each summand of the content and style loss terms, as well as the variational loss.
 
 \subsection{Datasets}
 
-We use images from the \textit{Places365} dataset \cite{places365}, containing 1.8 million scenic photographs as content images. A subset of 100 images from the \textit{WikiArt} dataset is selected that exhibits a broad range of abstract and artistic styles. We explicitly exclude realistic paintings as they do not contribute to the learning of styles. For both datasets, images are downsampled and cropped to a resolution of $96x96$ pixels.
+We use images from the \textit{Places365} dataset \cite{places365}, containing 1.8 million scenic photographs as content images. A subset of 100 images from the \textit{WikiArt} dataset is selected that exhibits a broad range of abstract and artistic styles. We explicitly exclude realistic paintings as they do not contribute to the learning of styles. For both datasets, images are downsampled and cropped to a resolution of 96x96 pixels.
 
 \section{Results}
 
+All the results we report are with respect to content images from a test dataset, while the style images are taken from the training data. This is due to the fact, that we observed our model to be unable to generalize to unseen styles beyond just simple color transformations. We conjecture that this is due to the model complexity being to low. Because we lack the necessary GPU resources however, we were not able to verify this hypothesis.
+
+\subsection{Variational and Non-Variational Autoencoders}
+	
+\begin{figure}
+\centering
+\includegraphics[width=0.9\linewidth]{ae_vs_vae.png}
+\caption{Stylizations of Non-Variational Autoencoders and Variational Autoencoders}
+\label{fig:ae_vae}
+\end{figure}
+
+First, we compare stylizations obtained by a model that uses a non-variational style encoder and compare it with the outputs of our proposed method. As can be seen in Figure \ref{fig:ae_vae}, we find that the introduction of sampling can prevent artifacts in the output image, as it also imposes regularization on the model itself. Furthermore, we find the overall quality of the variational approach to be visually more pleasing.
+
+\subsection{Style Interpolation}
+
+\begin{figure}
+\centering
+\includegraphics[width=0.9\linewidth]{interpolation.png}
+\caption{Interpolating between two different styles}
+\label{fig:interpolation}
+\end{figure}
+
+Figure \ref{fig:interpolation} shows, that the smoothness of the latent space allows for a meaningful interpolation between two styles. That is in particular noteworthy, as our model has highly overfitted to 100 style images and nonetheless is able to provide appealing stylizations that mix two different style images. That means, that even a model with no generalization capabilities at least yields a smooth latent style space containing the styles it was trained on.
+
+\subsection{Style Sampling}
+
+\begin{figure}
+\centering
+\includegraphics[width=0.9\linewidth]{sampling.png}
+\caption{Sampling random styles and comparing with the style image most similar to the sample in style space}
+\label{fig:sampling}
+\end{figure}
+
+Novel styles can be sampled by drawing random vectors from a standard normal distribution and conditioning the decoder on those. Figure \ref{fig:sampling} visualizes stylizations with randomly sampled style embeddings. It can be observed, that the variational approach visually outperforms the plain autoencoder architecture. In order to verify that the styles are indeed novel and unrelated to the style embeddings the model learned during training, we also show the style image that is most similar to the sampled style with respect to their latent representation. 
+
+\subsection{Non-Expert Deception Rate}
+
+We also conducted a survey among non-experts that were shown real artworks, stylizations provided by a non-variational autoencoder and outputs of our approach. Among five exemplars of each category the participants had to decide if an image they were presented was real or artificially generated. The images were shuffled before, and the participants were given a hard time-limit of five seconds to come up with a decision.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.9\linewidth]{survey.png}
+\caption{Deception rate among non-experts for non-variational autoencoders and our approach.}
+\label{fig:survey}
+\end{figure}
+
+Figure \ref{fig:survey} shows the results of our survey. While in general both approaches seem to perform similarly well, we observe that participants in general seemed to prefer non-abstract styles. Even though excluded from the figure, even in the case of real artworks low scores were recorded for abstract paintings. Nonetheless, two stylizations yielded by our approach outperform all five stylizations of the non-variational autoencoder. Not considering abstract styles - taking into account none of the participants had an arts-related background - this shows the superiority of our approach. 
+
+
 \section{Conclusion and Future Work}
+
+We propose an approach to artistic style transfer that embeds artworks into a smooth latent space making use of variational autoencoders. We show that this method allows for a smooth interpolation between different stylizations and also makes it possible to sample novel styles unseen by the model. Furthermore, introducing a variational prior on the style manifold imposes a regularization on the model that reduces artifacts in the output. 
+
+Due to the lack of resources we were unable to train a model with generalization capabilities beyond simple color transformations. However, comparing our approach with related work, we conjecture that a more complex model might in fact to overcome this limitation.
 
 {\small
 \bibliographystyle{ieee_fullname}
