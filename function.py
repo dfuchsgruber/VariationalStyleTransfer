@@ -37,31 +37,11 @@ def instance_mean_and_std(x):
         The instance standard deviations of x.
     """
     B, C, H, W = x.size()
+    if H == 1 and W == 1:
+        raise ValueError("height and width in decoder are 1, this means that the variance in the AdaIn layer becomes NaN. Use fewer downconvolutions or a higher resolution!")
     x_var, x_mean = torch.var_mean(x.view(B, C, -1), -1, keepdim=True)
     return x_mean.unsqueeze(-1), x_var.sqrt().unsqueeze(-1)
 
-"""
-def calc_mean_std(feat, eps=1e-5):
-    # eps is a small value added to the variance to avoid divide-by-zero.
-    size = feat.size()
-    assert (len(size) == 4)
-    N, C = size[:2]
-    feat_var = feat.view(N, C, -1).var(dim=2) + eps
-    feat_std = feat_var.sqrt().view(N, C, 1, 1)
-    feat_mean = feat.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
-    return feat_mean, feat_std
-
-
-def adaptive_instance_normalization(content_feat, style_feat):
-    assert (content_feat.size()[:2] == style_feat.size()[:2])
-    size = content_feat.size()
-    style_mean, style_std = calc_mean_std(style_feat)
-    content_mean, content_std = calc_mean_std(content_feat)
-
-    normalized_feat = (content_feat - content_mean.expand(
-        size)) / content_std.expand(size)
-    return normalized_feat * style_std.expand(size) + style_mean.expand(size)
-"""
 
 def adain(x, y):
     """ Applies Adaptive instance normalization to x with the affine parameters of y. Both mean and variance 
@@ -144,3 +124,21 @@ def adain_with_coefficients(x, mean, std):
     x += mean.view(B, C, 1, 1)
     return x
 
+def sample_normal(mean, log_var):
+    """ Draws a sample from a normal distribution using reparametrization. 
+    
+    Parameters:
+    -----------
+    mean : torch.tensor, shape [batch_size, D]
+        The mean of the distribution.
+    log_var : torch.tensor, shape [batch_size, D]
+        The logarithm of the variance of the distribution.
+    
+    Returns:
+    --------
+    sample : torch.tensor, shape [batch_size, D]
+        Samples from this distribution, differentiable w.r.t. to mean and log_var.
+    """
+    std = torch.exp(log_var * 0.5)
+    eps = torch.randn_like(std, device=mean.device, requires_grad=False)
+    return mean + eps * std
