@@ -108,7 +108,6 @@ class UNetAutoencoder(nn.Module):
         for idx in range(self.num_downup_without_connections, self.num_downup_convolutions):
             x = self.down_convs[idx](x)
             xs.append(x) # Connected to decoder layers using U-Net
-            #print(f'Appended to xs {x.size()}')
         
         # AdaIn convs
         for idx in range(self.num_adain_convolutions):
@@ -119,7 +118,6 @@ class UNetAutoencoder(nn.Module):
         # Upsampling, use U-Net connections
         for idx in range(self.remaining_upconvs):
             # U-Net connection
-            #print(f'Cat x of size {x.size()} to xs {xs[idx].size()}')
             x = torch.cat([x, xs[idx]], dim=1) # Concatenate along the channels dimension
             x = self.up_convs[idx](x, style_encoding=s)
         
