@@ -134,8 +134,7 @@ Novel styles can be sampled by drawing random vectors from a standard normal dis
 
 \subsection{Non-Expert Deception Rate}
 
-We also conducted a survey among non-experts that were shown real artworks, stylizations provided by a non-variational autoencoder and outputs of our approach. Among five exemplars of each category the participants had to decide if an image they were presented was real or artificially generated. The images were shuffled before, and the participants were given a hard time-limit of five seconds to come up with a decision.
-
+We also conducted a survey among 29 non-experts that were shown real artworks, stylizations provided by a non-variational autoencoder and outputs of our approach. Among five exemplars each, participants had to decide if an image they were presented was real or artificially generated. The images were shuffled before, and the participants were given a hard time-limit of five seconds to decide.
 \begin{figure}
 \centering
 \includegraphics[width=0.9\linewidth]{survey.png}
@@ -143,7 +142,7 @@ We also conducted a survey among non-experts that were shown real artworks, styl
 \label{fig:survey}
 \end{figure}
 
-Figure \ref{fig:survey} shows the results of our survey. While in general both approaches seem to perform similarly well, we observe that participants in general seemed to prefer non-abstract styles. Even in the case of real artworks low scores were recorded for abstract paintings: The average deception rate was $0.528986$, the best $0.857143$. Nonetheless, two stylizations yielded by our approach outperform all five stylizations of the non-variational autoencoder.
+Figure \ref{fig:survey} shows the results of our survey. While in general both approaches seem to perform similarly well, we observe that participants in general seemed to prefer non-abstract styles. Even in the case of real artworks low scores were recorded for abstract paintings ($0.296296$ at lowest), while average deception rate was $0.528986$, the best $0.857143$. Nonetheless, two stylizations yielded by our approach outperform all five stylizations of the non-variational autoencoder.
 
 
 \subsection{Variations in Style Space}
@@ -162,6 +161,11 @@ To further verify smoothness of the style manifold, we perturb a style embedding
 We propose an approach to artistic style transfer that embeds artworks into a smooth latent space making use of variational autoencoders. We show that this method allows for a smooth interpolation between different stylizations and also makes it possible to sample novel styles unseen by the model. Furthermore, introducing a variational prior on the style manifold imposes a regularization on the model that reduces artifacts in the output. 
 
 Due to the lack of resources we were unable to train a model with generalization capabilities beyond simple color transformations. However, comparing our approach with related work, we conjecture that a more complex model might in fact to overcome this limitation. We leave it to future work to reevaluate our findings for a larger model.
+
+\section{Appendix}
+
+All code can be found at \url{https://github.com/WodkaRHR/VariationalStyleTransfer}.
+
 
 {\small
 \bibliographystyle{ieee_fullname}
