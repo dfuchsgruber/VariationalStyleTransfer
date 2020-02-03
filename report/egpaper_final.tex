@@ -85,7 +85,7 @@ Our model consists of three parts: Two distinct encoders for content and style i
 Our network is trained with respect to three different objectives. Apart from the variational prior on the latent space, those losses are computed in the features space of a pre-trained VGG19 network.
 \begin{itemize}
 	\item The content loss penalizes deviations of the stylizations regarding the content image and is implemented as a perceptual loss. That is, we consider the feature maps of the $relu_{4,2}$ layer of the VGG19 network.
-	\item The style loss penalizes deviations from the style image by comparing the gram matrices of different VGG19 activation maps. We include all layers up to $relu_{4,2}$ into the style loss term.
+	\item The style loss penalizes deviations from the style image by comparing the gram matrices of different VGG19 activation maps. We include layers up to $relu_{5,1}$ into the style loss term.
 	\item The variational loss regularizes the latent space to resemble a standard normal distribution.
 \end{itemize}
 
@@ -97,7 +97,7 @@ We use images from the \textit{Places365} dataset \cite{places365}, containing 1
 
 \section{Results}
 
-All the results we report are with respect to content images from a test dataset, while the style images are taken from the training data. This is due to the fact, that we observed our model to be unable to generalize to unseen styles beyond just simple color transformations. Comparing with architectures of related work, we conjecture that this is due to the model complexity being to low. Because we lack the necessary GPU resources however, we were not able to verify this hypothesis.
+All the results we report are with respect to content images from a test dataset, while the style images are taken from the training data. This is due to the fact that we observed our model to be unable to generalize to unseen styles beyond just simple color transformations. Comparing with architectures of related work, we conjecture that this is due to the model complexity being to low. Because we lack the necessary GPU resources, we were however not able to verify this hypothesis.
 
 \subsection{Variational and Non-Variational Autoencoders}
 	
@@ -119,7 +119,7 @@ First, we compare stylizations obtained by a model that uses a non-variational s
 \label{fig:interpolation}
 \end{figure}
 
-Figure \ref{fig:interpolation} shows, that the smoothness of the latent space allows for a meaningful interpolation between two styles. That is in particular noteworthy, as our model has highly overfitted to 100 style images and nonetheless is able to provide appealing stylizations that mix two different style images. That means, that even a model with no generalization capabilities at least yields a smooth latent style space containing the styles it was trained on.
+Figure \ref{fig:interpolation} shows that the smoothness of the latent space allows for a meaningful interpolation between two styles. That is in particular noteworthy, as our model has highly overfitted to 100 style images and nonetheless is able to provide appealing stylizations that mix two different style images. That means that even a model with no generalization capabilities at least yields a smooth latent style space containing the styles it was trained on.
 
 \subsection{Style Sampling}
 
@@ -155,7 +155,7 @@ Figure \ref{fig:survey} shows the results of our survey. While in general both a
 \label{fig:pca}
 \end{figure}
 
-To further verify smoothness of the style manifold, we perturb a style embedding along the first two principal components of the style space. Figure \ref{fig:pca} shows, that those perturbations lead to smooth deviations in the model output.
+To further verify smoothness of the style manifold, we perturb a style embedding along the first two principal components of the style space. Figure \ref{fig:pca} shows that those perturbations lead to smooth deviations in the model output.
 
 \section{Conclusion and Future Work}
 
